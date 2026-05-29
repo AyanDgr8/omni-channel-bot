@@ -8,6 +8,7 @@ import Calls from "@/pages/calls";
 import Bots from "@/pages/bots";
 import Config from "@/pages/config";
 import Memory from "@/pages/memory";
+import FlowEditor from "@/pages/flow-editor";
 import Messaging from "@/pages/messaging";
 import CalendarPage from "@/pages/calendar";
 import NotFound from "@/pages/not-found";
@@ -30,6 +31,7 @@ function Router() {
         <Route path="/bots" component={Bots} />
         <Route path="/config" component={Config} />
         <Route path="/memory" component={Memory} />
+        <Route path="/flow" component={FlowEditor} />
         <Route path="/messaging" component={Messaging} />
         <Route path="/calendar" component={CalendarPage} />
         <Route component={NotFound} />

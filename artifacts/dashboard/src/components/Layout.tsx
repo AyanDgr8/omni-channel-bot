@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Calendar,
   Radio,
+  GitBranch,
 } from "lucide-react";
 
 const nav = [
@@ -17,6 +18,7 @@ const nav = [
   { href: "/bots", label: "Bot Network", icon: Bot },
   { href: "/config", label: "Configuration", icon: Settings },
   { href: "/memory", label: "Knowledge Base", icon: Brain },
+  { href: "/flow", label: "Flow Builder", icon: GitBranch },
   { href: "/messaging", label: "Messaging Hub", icon: MessageSquare },
   { href: "/calendar", label: "Calendar", icon: Calendar },
 ];
