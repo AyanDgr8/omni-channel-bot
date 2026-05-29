@@ -47,14 +47,14 @@ function fmtDate(d: string | null | undefined) {
 export default function Calls() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [dirFilter, setDirFilter] = useState<string>("");
+  const [dirFilter, setDirFilter] = useState<string>("all");
   const [dialOpen, setDialOpen] = useState(false);
   const [dialTo, setDialTo] = useState("");
   const [dialBot, setDialBot] = useState("");
   const [page, setPage] = useState(0);
   const limit = 20;
 
-  const params = { limit, offset: page * limit, ...(dirFilter ? { direction: dirFilter as "INBOUND" | "OUTBOUND" } : {}) };
+  const params = { limit, offset: page * limit, ...(dirFilter !== "all" ? { direction: dirFilter as "INBOUND" | "OUTBOUND" } : {}) };
   const { data, isLoading, refetch } = useListCalls(params, { query: { queryKey: getListCallsQueryKey(params) } });
   const { data: bots } = useListBots();
   const dialMutation = useDialCall();
@@ -105,7 +105,7 @@ export default function Calls() {
               <SelectValue placeholder="All directions" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="INBOUND">Inbound</SelectItem>
               <SelectItem value="OUTBOUND">Outbound</SelectItem>
             </SelectContent>
