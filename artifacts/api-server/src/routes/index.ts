@@ -7,6 +7,7 @@ import configRouter from "./config";
 import memoryRouter from "./memory";
 import calendarRouter from "./calendar";
 import messagingRouter from "./messaging";
+import apiKeysRouter from "./api-keys";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(configRouter);
 router.use(memoryRouter);
 router.use(calendarRouter);
 router.use(messagingRouter);
+router.use(apiKeysRouter);
 
 export default router;

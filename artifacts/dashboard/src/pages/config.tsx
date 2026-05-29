@@ -10,16 +10,15 @@ import {
   getGetConversationConfigQueryKey,
   getGetLlmConfigQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Save, RotateCcw } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, Loader2, RefreshCw } from "lucide-react";
 
 function SliderField({ label, value, onChange, min = 0, max = 1, step = 0.01, fmt = (v: number) => v.toFixed(2) }: {
   label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; fmt?: (v: number) => string;
