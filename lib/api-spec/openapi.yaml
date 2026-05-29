@@ -1,36 +1,1240 @@
-openapi: 3.1.0
+openapi: "3.1.0"
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: "1.0.0"
+  description: VoxAgent AI Voice Bot Platform API
+
 servers:
   - url: /api
-    description: Base API path
-tags:
-  - name: health
-    description: Health operations
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
-      tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
-          description: Healthy
+          description: OK
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Calls ───────────────────────────────────────────────────────
+  /v1/calls:
+    get:
+      operationId: listCalls
+      summary: List calls with filters
+      parameters:
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum: [INBOUND, OUTBOUND]
+        - in: query
+          name: hangupReason
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: botId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of calls
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallList"
+
+  /v1/calls/dial:
+    post:
+      operationId: dialCall
+      summary: Initiate an outbound call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialInput"
+      responses:
+        "201":
+          description: Call initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+        "400":
+          description: Bad request
+
+  /v1/calls/{id}:
+    get:
+      operationId: getCall
+      summary: Get call details and status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Call details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+        "404":
+          description: Not found
+    delete:
+      operationId: hangupCall
+      summary: Hang up an active call
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Call hung up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+        "404":
+          description: Not found
+
+  /v1/calls/{id}/transfer:
+    post:
+      operationId: transferCall
+      summary: Transfer call to extension or number
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferInput"
+      responses:
+        "200":
+          description: Transfer initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+        "404":
+          description: Not found
+
+  /v1/calls/{id}/conference:
+    post:
+      operationId: conferenceCall
+      summary: Add a party to a conference
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConferenceInput"
+      responses:
+        "200":
+          description: Conference created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+        "404":
+          description: Not found
+
+  # ─── Dashboard Stats ──────────────────────────────────────────────
+  /v1/stats/overview:
+    get:
+      operationId: getStatsOverview
+      summary: Dashboard overview statistics
+      responses:
+        "200":
+          description: Overview stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsOverview"
+
+  /v1/stats/calls-by-hour:
+    get:
+      operationId: getCallsByHour
+      summary: Call volume by hour for the last 24h
+      responses:
+        "200":
+          description: Hourly call data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HourlyCallStat"
+
+  /v1/stats/hangup-reasons:
+    get:
+      operationId: getHangupReasons
+      summary: Distribution of hangup reasons
+      responses:
+        "200":
+          description: Hangup reason breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HangupReasonStat"
+
+  # ─── Bots ─────────────────────────────────────────────────────────
+  /v1/bots:
+    get:
+      operationId: listBots
+      summary: List all registered bots
+      responses:
+        "200":
+          description: List of bots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bot"
+    post:
+      operationId: createBot
+      summary: Register a new bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotInput"
+      responses:
+        "201":
+          description: Bot created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+
+  /v1/bots/{id}:
+    get:
+      operationId: getBot
+      summary: Get bot details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bot details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateBot
+      summary: Update bot configuration
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotUpdate"
+      responses:
+        "200":
+          description: Bot updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteBot
+      summary: Delete a bot
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Config ───────────────────────────────────────────────────────
+  /v1/config/persona:
+    get:
+      operationId: getPersonaConfig
+      summary: Get current persona configuration
+      responses:
+        "200":
+          description: Persona config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonaConfig"
+    put:
+      operationId: updatePersonaConfig
+      summary: Update persona configuration (hot-reload)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonaConfigInput"
+      responses:
+        "200":
+          description: Persona updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonaConfig"
+
+  /v1/config/conversation:
+    get:
+      operationId: getConversationConfig
+      summary: Get conversation pacing configuration
+      responses:
+        "200":
+          description: Conversation config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationConfig"
+    put:
+      operationId: updateConversationConfig
+      summary: Update conversation pacing configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationConfigInput"
+      responses:
+        "200":
+          description: Conversation config updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationConfig"
+
+  /v1/config/llm:
+    get:
+      operationId: getLlmConfig
+      summary: Get LLM engine configuration
+      responses:
+        "200":
+          description: LLM config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmConfig"
+    put:
+      operationId: updateLlmConfig
+      summary: Update LLM engine configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LlmConfigInput"
+      responses:
+        "200":
+          description: LLM config updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmConfig"
+
+  # ─── Memory ───────────────────────────────────────────────────────
+  /v1/memory/entries:
+    get:
+      operationId: listMemoryEntries
+      summary: List all memory entries with stats
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Memory entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryEntryList"
+    post:
+      operationId: createMemoryEntry
+      summary: Add a new Q&A memory entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryEntryInput"
+      responses:
+        "201":
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryEntry"
+
+  /v1/memory/entries/{id}:
+    put:
+      operationId: updateMemoryEntry
+      summary: Update a memory entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryEntryUpdate"
+      responses:
+        "200":
+          description: Entry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryEntry"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteMemoryEntry
+      summary: Delete a memory entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /v1/memory/stats:
+    get:
+      operationId: getMemoryStats
+      summary: Get memory system hit rate and cache stats
+      responses:
+        "200":
+          description: Memory stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryStats"
+
+  /v1/memory/train:
+    post:
+      operationId: trainMemory
+      summary: Trigger embedding reindex for memory training
+      responses:
+        "200":
+          description: Training started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainResult"
+
+  # ─── Calendar ─────────────────────────────────────────────────────
+  /v1/calendar/invite:
+    post:
+      operationId: createCalendarInvite
+      summary: Create and send a calendar invite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarInviteInput"
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarInvite"
+
+  /v1/calendar/slots:
+    get:
+      operationId: getAvailableSlots
+      summary: Get available calendar slots
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Available slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeSlot"
+
+  # ─── Messaging ────────────────────────────────────────────────────
+  /v1/messaging/whatsapp:
+    post:
+      operationId: sendWhatsApp
+      summary: Send a WhatsApp message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsAppMessageInput"
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResult"
+
+  /v1/messaging/telegram:
+    post:
+      operationId: sendTelegram
+      summary: Send a Telegram message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramMessageInput"
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResult"
+
+  /v1/messaging/email:
+    post:
+      operationId: sendEmail
+      summary: Send an email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailMessageInput"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResult"
+
+  /v1/messaging/logs:
+    get:
+      operationId: listMessageLogs
+      summary: List message delivery logs
+      parameters:
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum: [whatsapp, telegram, email]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Message logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageLog"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # ─── Call schemas ─────────────────────────────────────────────
+    Call:
+      type: object
+      required: [id, botId, direction, status, createdAt]
+      properties:
+        id:
+          type: string
+        botId:
+          type: string
+        direction:
+          type: string
+          enum: [INBOUND, OUTBOUND]
+        status:
+          type: string
+          enum: [INITIATING, RINGING, IN_PROGRESS, COMPLETED, FAILED]
+        customerNumber:
+          type: ["string", "null"]
+        customerName:
+          type: ["string", "null"]
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+        endedAt:
+          type: ["string", "null"]
+          format: date-time
+        durationSeconds:
+          type: ["integer", "null"]
+        hangupReason:
+          type: ["string", "null"]
+        sipCode:
+          type: ["integer", "null"]
+        amdResult:
+          type: ["string", "null"]
+        languageDetected:
+          type: ["string", "null"]
+        recordingUrl:
+          type: ["string", "null"]
+        summary:
+          type: ["string", "null"]
+        transferTarget:
+          type: ["string", "null"]
+        followUpSent:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CallList:
+      type: object
+      required: [calls, total]
+      properties:
+        calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/Call"
+        total:
+          type: integer
+
+    DialInput:
+      type: object
+      required: [to, botId]
+      properties:
+        to:
+          type: string
+          description: E.164 phone number
+        from:
+          type: ["string", "null"]
+          description: Caller ID (E.164)
+        botId:
+          type: string
+        maxRingSeconds:
+          type: integer
+          default: 30
+        maxAttempts:
+          type: integer
+          default: 3
+
+    TransferInput:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [BLIND, ATTENDED]
+        extension:
+          type: ["string", "null"]
+        e164:
+          type: ["string", "null"]
+        agentName:
+          type: ["string", "null"]
+        announceMessage:
+          type: ["string", "null"]
+        waitTimeoutSeconds:
+          type: integer
+          default: 20
+
+    ConferenceInput:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          description: E.164 number or extension to add
+        dropBotAfterConnect:
+          type: boolean
+          default: false
+
+    # ─── Stats schemas ────────────────────────────────────────────
+    StatsOverview:
+      type: object
+      required: [totalCalls, activeCalls, completedToday, successRate, avgDurationSeconds, amdAccuracy, memoryHitRate, totalBots]
+      properties:
+        totalCalls:
+          type: integer
+        activeCalls:
+          type: integer
+        completedToday:
+          type: integer
+        successRate:
+          type: number
+        avgDurationSeconds:
+          type: number
+        amdAccuracy:
+          type: number
+        memoryHitRate:
+          type: number
+        totalBots:
+          type: integer
+
+    HourlyCallStat:
+      type: object
+      required: [hour, inbound, outbound]
+      properties:
+        hour:
+          type: string
+        inbound:
+          type: integer
+        outbound:
+          type: integer
+
+    HangupReasonStat:
+      type: object
+      required: [reason, count, percentage]
+      properties:
+        reason:
+          type: string
+        count:
+          type: integer
+        percentage:
+          type: number
+
+    # ─── Bot schemas ──────────────────────────────────────────────
+    Bot:
+      type: object
+      required: [id, displayName, sipExtension, status, createdAt]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: ["string", "null"]
+        sipExtension:
+          type: string
+        sipDomain:
+          type: ["string", "null"]
+        whatsappNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [ONLINE, OFFLINE, BUSY, ERROR]
+        activeCalls:
+          type: integer
+          default: 0
+        createdAt:
+          type: string
+          format: date-time
+
+    BotInput:
+      type: object
+      required: [displayName, sipExtension]
+      properties:
+        displayName:
+          type: string
+        email:
+          type: ["string", "null"]
+        sipExtension:
+          type: string
+        sipDomain:
+          type: ["string", "null"]
+        whatsappNumber:
+          type: ["string", "null"]
+
+    BotUpdate:
+      type: object
+      properties:
+        displayName:
+          type: string
+        email:
+          type: ["string", "null"]
+        sipExtension:
+          type: string
+        sipDomain:
+          type: ["string", "null"]
+        whatsappNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [ONLINE, OFFLINE, BUSY, ERROR]
+
+    # ─── Config schemas ───────────────────────────────────────────
+    PersonaConfig:
+      type: object
+      required: [id, name, character, formality, verbosity, empathyLevel, speakingRate, greetingStyle, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        character:
+          type: string
+          enum: [professional, friendly, funny, serious, empathetic, casual]
+        formality:
+          type: number
+        verbosity:
+          type: number
+        empathyLevel:
+          type: number
+        humorLevel:
+          type: number
+        speakingRate:
+          type: number
+        pitch:
+          type: number
+        voiceId:
+          type: ["string", "null"]
+        fillerWordsEnabled:
+          type: boolean
+        greetingStyle:
+          type: string
+          enum: [warm, formal, brief]
+        interruptMode:
+          type: string
+          enum: [HARD_INTERRUPT, SOFT_INTERRUPT, NO_INTERRUPT]
+        updatedAt:
+          type: string
+          format: date-time
+
+    PersonaConfigInput:
+      type: object
+      properties:
+        name:
+          type: string
+        character:
+          type: string
+          enum: [professional, friendly, funny, serious, empathetic, casual]
+        formality:
+          type: number
+        verbosity:
+          type: number
+        empathyLevel:
+          type: number
+        humorLevel:
+          type: number
+        speakingRate:
+          type: number
+        pitch:
+          type: number
+        voiceId:
+          type: ["string", "null"]
+        fillerWordsEnabled:
+          type: boolean
+        greetingStyle:
+          type: string
+          enum: [warm, formal, brief]
+        interruptMode:
+          type: string
+          enum: [HARD_INTERRUPT, SOFT_INTERRUPT, NO_INTERRUPT]
+
+    ConversationConfig:
+      type: object
+      required: [id, answerDelayMs, maxSilenceMs, bargeInEnabled, bargeInThreshold, minSpeechMs, endOfUtteranceMs, maxTurnDurationSec, responseTimeoutSec, speakingRate, updatedAt]
+      properties:
+        id:
+          type: string
+        answerDelayMs:
+          type: integer
+        maxSilenceMs:
+          type: integer
+        bargeInEnabled:
+          type: boolean
+        bargeInThreshold:
+          type: number
+        minSpeechMs:
+          type: integer
+        endOfUtteranceMs:
+          type: integer
+        maxTurnDurationSec:
+          type: integer
+        responseTimeoutSec:
+          type: integer
+        speakingRate:
+          type: number
+        interWordPauseMs:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    ConversationConfigInput:
+      type: object
+      properties:
+        answerDelayMs:
+          type: integer
+        maxSilenceMs:
+          type: integer
+        bargeInEnabled:
+          type: boolean
+        bargeInThreshold:
+          type: number
+        minSpeechMs:
+          type: integer
+        endOfUtteranceMs:
+          type: integer
+        maxTurnDurationSec:
+          type: integer
+        responseTimeoutSec:
+          type: integer
+        speakingRate:
+          type: number
+        interWordPauseMs:
+          type: integer
+
+    LlmConfig:
+      type: object
+      required: [id, primary, fallbackChain, timeoutMs, maxRetries, updatedAt]
+      properties:
+        id:
+          type: string
+        primary:
+          type: string
+          enum: [openai, anthropic, gemini, ollama]
+        fallbackChain:
+          type: array
+          items:
+            type: string
+        timeoutMs:
+          type: integer
+        maxRetries:
+          type: integer
+        circuitBreakerFailureThreshold:
+          type: integer
+        circuitBreakerRecoveryTimeoutSec:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    LlmConfigInput:
+      type: object
+      properties:
+        primary:
+          type: string
+          enum: [openai, anthropic, gemini, ollama]
+        fallbackChain:
+          type: array
+          items:
+            type: string
+        timeoutMs:
+          type: integer
+        maxRetries:
+          type: integer
+        circuitBreakerFailureThreshold:
+          type: integer
+        circuitBreakerRecoveryTimeoutSec:
+          type: integer
+
+    # ─── Memory schemas ───────────────────────────────────────────
+    MemoryEntry:
+      type: object
+      required: [id, question, answer, hitCount, confidence, createdAt]
+      properties:
+        id:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+        hitCount:
+          type: integer
+        confidence:
+          type: number
+        tier:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        lastHitAt:
+          type: ["string", "null"]
+          format: date-time
+
+    MemoryEntryList:
+      type: object
+      required: [entries, total]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/MemoryEntry"
+        total:
+          type: integer
+
+    MemoryEntryInput:
+      type: object
+      required: [question, answer]
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        confidence:
+          type: number
+
+    MemoryEntryUpdate:
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        confidence:
+          type: number
+
+    MemoryStats:
+      type: object
+      required: [l1HitRate, l2HitRate, l3HitRate, totalEntries, l1Size, l2Size, l3Size, totalHits, totalMisses]
+      properties:
+        l1HitRate:
+          type: number
+        l2HitRate:
+          type: number
+        l3HitRate:
+          type: number
+        totalEntries:
+          type: integer
+        l1Size:
+          type: integer
+        l2Size:
+          type: integer
+        l3Size:
+          type: integer
+        totalHits:
+          type: integer
+        totalMisses:
+          type: integer
+
+    TrainResult:
+      type: object
+      required: [status, entriesIndexed]
+      properties:
+        status:
+          type: string
+        entriesIndexed:
+          type: integer
+
+    # ─── Calendar schemas ─────────────────────────────────────────
+    CalendarInvite:
+      type: object
+      required: [id, title, start, end, timezone, attendees, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        attendees:
+          type: array
+          items:
+            type: string
+        location:
+          type: ["string", "null"]
+        meetLink:
+          type: ["string", "null"]
+        calendarEventId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    CalendarInviteInput:
+      type: object
+      required: [title, start, end, timezone, attendees]
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        attendees:
+          type: array
+          items:
+            type: string
+        location:
+          type: ["string", "null"]
+        callId:
+          type: ["string", "null"]
+
+    TimeSlot:
+      type: object
+      required: [start, end, available]
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+
+    # ─── Messaging schemas ────────────────────────────────────────
+    WhatsAppMessageInput:
+      type: object
+      required: [to]
+      properties:
+        to:
+          type: string
+        templateName:
+          type: ["string", "null"]
+        language:
+          type: string
+        freeText:
+          type: ["string", "null"]
+        callId:
+          type: ["string", "null"]
+
+    TelegramMessageInput:
+      type: object
+      required: [chatId, text]
+      properties:
+        chatId:
+          type: string
+        text:
+          type: string
+        callId:
+          type: ["string", "null"]
+
+    EmailMessageInput:
+      type: object
+      required: [to, subject, templateName]
+      properties:
+        to:
+          type: string
+        subject:
+          type: string
+        templateName:
+          type: string
+          enum: [call_summary, follow_up, appointment_confirmation, missed_call_notification]
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+        callId:
+          type: ["string", "null"]
+
+    MessageResult:
+      type: object
+      required: [success, messageId]
+      properties:
+        success:
+          type: boolean
+        messageId:
+          type: string
+        channel:
+          type: string
+        deliveryStatus:
+          type: string
+
+    MessageLog:
+      type: object
+      required: [id, channel, recipient, status, createdAt]
+      properties:
+        id:
+          type: string
+        channel:
+          type: string
+          enum: [whatsapp, telegram, email]
+        recipient:
+          type: string
+        templateName:
+          type: ["string", "null"]
+        messageId:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [sent, delivered, failed]
+        callId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time

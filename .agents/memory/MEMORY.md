@@ -1,0 +1,2 @@
+- [Tailwind v4 dark mode](tailwind-v4-dark.md) — `dark` cannot be used in `@apply`; it's a variant only, not a utility class.
+- [DB lib build order](db-lib-build-order.md) — must run `pnpm run typecheck:libs` before typechecking leaf packages that import `@workspace/db`, or table exports won't resolve.
