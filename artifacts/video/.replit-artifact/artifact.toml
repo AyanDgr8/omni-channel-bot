@@ -1,0 +1,28 @@
+kind = "video"
+previewPath = "/video/"
+title = "VoxAgent — Product Video"
+description = "A 60-90 second animated motion-graphics explainer video for the VoxAgent AI voice-bot control platform, covering the Persona Engine, Call Direction System, Call Intelligence, Bot Network, and Call Log."
+version = "1.0.0"
+id = "artifacts/video"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/video/" ]
+localPort = 24908
+
+[services.development]
+run = "pnpm --filter @workspace/video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24908"
+BASE_PATH = "/video/"

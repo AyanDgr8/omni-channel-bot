@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "eX0opr9J4pjoQIGBXM7RK"
+uri = "file://artifacts/video/public/audio/bg_music.mp3"
+type = "audio"
+title = "VoxAgent background music"
+description = "Generated music: Corporate motivational cinematic instrumental, 100 BPM, clean synthesizers, light percussion, confident and forward-moving energy. Subtle intro build, steady groove in the middle, up…"

@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'DM Sans', sans-serif;
+  --font-display: 'Outfit', sans-serif;
+
+  --color-primary: #4F46E5; /* Indigo 600 */
+  --color-primary-light: #818CF8;
+  --color-secondary: #06B6D4; /* Cyan 500 */
+  --color-secondary-light: #67E8F9;
+  
+  --color-bg-base: #F8FAFC; /* Slate 50 */
+  --color-bg-panel: #FFFFFF;
+  --color-bg-dark: #0F172A; /* Slate 900 */
+  
+  --color-text-main: #0F172A;
+  --color-text-muted: #475569;
+  --color-text-inverse: #FFFFFF;
+
+  --color-accent-success: #10B981;
+  --color-accent-warning: #F59E0B;
+}
+
+:root {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-base);
+  color: var(--color-text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Base resets */
+* {
+  box-sizing: border-border-box;
+}
+
+/* Custom utility classes if needed */
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.05);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+}
