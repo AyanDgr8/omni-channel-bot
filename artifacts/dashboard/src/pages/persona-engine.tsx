@@ -20,6 +20,19 @@ import {
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// ─── API error with optional Zod validation issues ───────────────────────────
+
+export interface ValidationIssue { path: (string | number)[]; message: string; }
+
+class ApiError extends Error {
+  issues?: ValidationIssue[];
+  constructor(message: string, issues?: ValidationIssue[]) {
+    super(message);
+    this.issues = issues;
+  }
+}
+
 async function api(path: string, opts?: RequestInit) {
   const r = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -27,7 +40,7 @@ async function api(path: string, opts?: RequestInit) {
   });
   if (!r.ok) {
     const e = await r.json().catch(() => ({ error: r.statusText }));
-    throw new Error((e as any).error ?? r.statusText);
+    throw new ApiError((e as any).error ?? r.statusText, (e as any).issues);
   }
   if (r.status === 204) return null;
   return r.json();
@@ -111,7 +124,26 @@ function SourceBadge({ source }: { source: string }) {
 
 // ─── Trait Editor ─────────────────────────────────────────────────────────────
 
-function TraitEditor({ traits, onChange }: { traits: PersonaTraits; onChange: (t: PersonaTraits) => void }) {
+function SectionErrors({ issues, section }: { issues: ValidationIssue[]; section: string }) {
+  const relevant = issues.filter(i => String(i.path[0]) === section);
+  if (!relevant.length) return null;
+  return (
+    <div className="space-y-1">
+      {relevant.map((issue, idx) => (
+        <p key={idx} className="text-xs text-destructive flex items-start gap-1">
+          <span className="mt-0.5 shrink-0">⚠</span>
+          <span><span className="font-medium">{issue.path.slice(1).join(" › ")}: </span>{issue.message}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function TraitEditor({ traits, onChange, validationIssues = [] }: {
+  traits: PersonaTraits;
+  onChange: (t: PersonaTraits) => void;
+  validationIssues?: ValidationIssue[];
+}) {
   const t = traits;
   const set = (path: string[], value: unknown) => {
     const copy = JSON.parse(JSON.stringify(t)) as PersonaTraits;
@@ -126,6 +158,7 @@ function TraitEditor({ traits, onChange }: { traits: PersonaTraits; onChange: (t
       {/* IDENTITY */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Identity</h3>
+        <SectionErrors issues={validationIssues} section="identity" />
         <div className="space-y-1"><Label className="text-xs">Role Title</Label><Input className="text-xs h-8" value={t.identity.role_title} onChange={e => set(["identity", "role_title"], e.target.value)} /></div>
         <div className="space-y-1"><Label className="text-xs">Backstory</Label><Textarea className="text-xs min-h-20" value={t.identity.backstory} onChange={e => set(["identity", "backstory"], e.target.value)} /></div>
         <TagEditor label="Goals" values={t.identity.goals} onChange={v => set(["identity", "goals"], v)} />
@@ -134,6 +167,7 @@ function TraitEditor({ traits, onChange }: { traits: PersonaTraits; onChange: (t
       {/* LANGUAGE */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Language</h3>
+        <SectionErrors issues={validationIssues} section="language" />
         <TagEditor label="Domain Jargon" values={t.language.jargon} onChange={v => set(["language", "jargon"], v)} />
         <TagEditor label="Greeting Phrases" values={t.language.greeting_phrases} onChange={v => set(["language", "greeting_phrases"], v)} />
         <TagEditor label="Closing Phrases" values={t.language.closing_phrases} onChange={v => set(["language", "closing_phrases"], v)} />
@@ -144,6 +178,7 @@ function TraitEditor({ traits, onChange }: { traits: PersonaTraits; onChange: (t
       {/* TONE */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tone (1–10)</h3>
+        <SectionErrors issues={validationIssues} section="tone" />
         {(["warmth", "formality", "energy", "empathy", "verbosity"] as const).map(k => (
           <ToneSlider key={k} label={k.charAt(0).toUpperCase() + k.slice(1)} value={t.tone[k]} onChange={v => set(["tone", k], v)} />
         ))}
@@ -152,6 +187,7 @@ function TraitEditor({ traits, onChange }: { traits: PersonaTraits; onChange: (t
       {/* VOICE */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Voice</h3>
+        <SectionErrors issues={validationIssues} section="voice" />
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1"><Label className="text-xs">Pace</Label>
             <Select value={t.voice.pace} onValueChange={v => set(["voice", "pace"], v)}>
@@ -173,6 +209,7 @@ function TraitEditor({ traits, onChange }: { traits: PersonaTraits; onChange: (t
       {/* BEHAVIOR */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Behavior</h3>
+        <SectionErrors issues={validationIssues} section="behavior" />
         <div className="space-y-1"><Label className="text-xs">Interrupt Tolerance</Label>
           <Select value={t.behavior.interrupt_tolerance} onValueChange={v => set(["behavior", "interrupt_tolerance"], v)}>
             <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
@@ -374,8 +411,15 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
 
   const [editedTraits, setEditedTraits] = useState<PersonaTraits | null>(null);
   const [activeSection, setActiveSection] = useState<"edit" | "refine" | "test">("edit");
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
 
   const currentTraits = editedTraits ?? detail?.traits?.traits ?? null;
+
+  // Clear validation issues when the user edits traits (so they know their change was registered)
+  function handleTraitsChange(t: PersonaTraits) {
+    setEditedTraits(t);
+    if (validationIssues.length) setValidationIssues([]);
+  }
 
   const activate = useMutation({
     mutationFn: () => api(`/api/v1/personas/${persona.id}/activate`, { method: "POST" }),
@@ -385,14 +429,29 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
 
   const regenerate = useMutation({
     mutationFn: () => api(`/api/v1/personas/${persona.id}/regenerate`, { method: "POST" }),
-    onSuccess: () => { toast({ title: "Traits regenerated" }); qc.invalidateQueries({ queryKey: ["persona-detail", persona.id] }); setEditedTraits(null); },
+    onSuccess: () => { toast({ title: "Traits regenerated" }); qc.invalidateQueries({ queryKey: ["persona-detail", persona.id] }); setEditedTraits(null); setValidationIssues([]); },
     onError: (e: Error) => toast({ title: "Regeneration failed", description: e.message, variant: "destructive" }),
   });
 
   const saveTraits = useMutation({
     mutationFn: () => api(`/api/v1/personas/${persona.id}/traits`, { method: "PUT", body: JSON.stringify(editedTraits) }),
-    onSuccess: () => { toast({ title: "Traits saved" }); qc.invalidateQueries({ queryKey: ["persona-detail", persona.id] }); qc.invalidateQueries({ queryKey: ["personas"] }); setEditedTraits(null); },
-    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+    onSuccess: () => {
+      toast({ title: "Traits saved" });
+      qc.invalidateQueries({ queryKey: ["persona-detail", persona.id] });
+      qc.invalidateQueries({ queryKey: ["personas"] });
+      setEditedTraits(null);
+      setValidationIssues([]);
+    },
+    onError: (e: Error) => {
+      const issues = (e as ApiError).issues;
+      if (issues?.length) {
+        setValidationIssues(issues);
+        setActiveSection("edit");
+        toast({ title: "Validation failed", description: "Fix the highlighted fields and try again.", variant: "destructive" });
+      } else {
+        toast({ title: "Save failed", description: e.message, variant: "destructive" });
+      }
+    },
   });
 
   if (isLoading) return <div className="flex items-center gap-2 text-xs text-muted-foreground py-8"><Loader2 className="w-4 h-4 animate-spin" /> Loading...</div>;
@@ -443,10 +502,13 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
 
       {activeSection === "edit" && currentTraits && (
         <div className="bg-card border border-border rounded p-4 max-w-2xl">
-          <TraitEditor traits={currentTraits} onChange={setEditedTraits} />
-          {editedTraits && (
-            <div className="pt-4 border-t border-border mt-4">
-              <Button size="sm" className="text-xs h-8" onClick={() => saveTraits.mutate()} disabled={saveTraits.isPending}>
+          <TraitEditor traits={currentTraits} onChange={handleTraitsChange} validationIssues={validationIssues} />
+          {(editedTraits || validationIssues.length > 0) && (
+            <div className="pt-4 border-t border-border mt-4 space-y-2">
+              {validationIssues.length > 0 && (
+                <p className="text-xs text-destructive">Fix the errors above before saving.</p>
+              )}
+              <Button size="sm" className="text-xs h-8" onClick={() => saveTraits.mutate()} disabled={saveTraits.isPending || !editedTraits}>
                 {saveTraits.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}Save Changes
               </Button>
             </div>

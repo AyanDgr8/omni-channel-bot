@@ -10,7 +10,7 @@ import { logger } from "./logger";
 
 // ─── Zod schema for trait validation ─────────────────────────────────────────
 
-const ToneSchema = z.object({
+export const ToneSchema = z.object({
   warmth: z.number().int().min(1).max(10),
   formality: z.number().int().min(1).max(10),
   energy: z.number().int().min(1).max(10),
@@ -18,7 +18,7 @@ const ToneSchema = z.object({
   verbosity: z.number().int().min(1).max(10),
 });
 
-const TraitsSchema = z.object({
+export const TraitsSchema = z.object({
   identity: z.object({
     role_title: z.string(),
     backstory: z.string(),

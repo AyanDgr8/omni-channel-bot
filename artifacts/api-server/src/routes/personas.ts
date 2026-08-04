@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
 import { db, personasTable, personaTraitsTable, llmConfigTable } from "@workspace/db";
 import type { PersonaTraitsJson } from "@workspace/db";
-import { resolvePersonaTraits, refinePersonaTraits } from "../lib/persona-service";
+import { resolvePersonaTraits, refinePersonaTraits, TraitsSchema } from "../lib/persona-service";
 import { composeSystemPrompt, extractVoiceSettings } from "../lib/persona-composer";
 import { logger } from "../lib/logger";
 
@@ -116,7 +116,21 @@ router.put("/v1/personas/:id/traits", async (req, res) => {
   const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, req.params.id));
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
 
-  const traits = req.body as PersonaTraitsJson;
+  // Validate the traits body against TraitsSchema before persisting
+  const parsed = TraitsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map(i => ({
+      path: i.path,
+      message: i.message,
+    }));
+    res.status(400).json({
+      error: "Trait validation failed",
+      issues,
+    });
+    return;
+  }
+
+  const traits = parsed.data as PersonaTraitsJson;
   const newVersion = persona.version + 1;
 
   await db.insert(personaTraitsTable).values({
