@@ -1,0 +1,100 @@
+Build a new feature called the Agentic Persona Engine that upgrades the existing Persona tab in Configuration. The goal: when I define a persona by name (e.g., "Hotel Receptionist", "Insurance Claims Agent", "Hospital Appointment Desk"), the system should automatically research and load the full trait profile for that persona — either from a persona library in the database, or by querying the LLM to generate the traits — instead of me configuring every trait manually.
+
+1. Database schema
+
+Create two new tables:
+
+personas
+
+id (uuid, pk)
+name (text, unique)
+description (text, optional — user's own notes about the persona)
+source (enum: "library" | "llm_generated" | "manual")
+is_active (boolean)
+version (integer, increments on each regeneration/edit)
+created_at, updated_at
+
+persona_traits (one row per persona version, JSONB payload)
+
+id (uuid, pk)
+persona_id (fk → personas)
+version (integer)
+traits (jsonb) — see schema below
+generated_by_model (text — which LLM produced it, null if manual)
+
+The traits JSONB must follow this exact schema:
+
+json
+{
+  "identity": {
+    "role_title": "Hotel Receptionist",
+    "backstory": "Front-desk professional at an upscale business hotel...",
+    "goals": ["Make guests feel welcome", "Resolve requests in one interaction"]
+  },
+  "language": {
+    "jargon": ["check-in", "late checkout", "room upgrade", "concierge", "amenities"],
+    "greeting_phrases": ["Good morning, thank you for calling...", "..."],
+    "closing_phrases": ["Is there anything else I can assist you with?"],
+    "forbidden_phrases": ["I don't know", "That's not my job"],
+    "sample_utterances": ["Certainly, let me check availability for you."]
+  },
+  "tone": {
+    "warmth": 8,
+    "formality": 7,
+    "energy": 6,
+    "empathy": 7,
+    "verbosity": 4
+  },
+  "voice": {
+    "suggested_gender": "any",
+    "pace": "moderate",
+    "pitch": "medium",
+    "deepgram_voice_hint": "aura-asteria-en"
+  },
+  "behavior": {
+    "interrupt_tolerance": "high",
+    "silence_strategy": "gentle_prompt_after_4s",
+    "escalation_rule": "transfer to human if guest is upset or request is outside hotel services",
+    "do_rules": ["Always confirm the caller's name early", "Repeat back booking details"],
+    "dont_rules": ["Never quote prices without checking the rate table", "Never argue"]
+  }
+}
+
+All tone values are integers 1–10.
+
+2. Trait resolution logic (DB-first, LLM fallback)
+
+When a user creates or activates a persona, resolve traits in this priority order:
+
+Database library lookup — case-insensitive match on persona name against existing personas with source = "library" or previously generated ones. If found, load the latest version of its traits.
+LLM generation — if not found, call the already-configured primary LLM (with fallback chain from the LLM Engine tab). Use a system prompt that instructs the model to act as a persona designer and return ONLY valid JSON matching the schema above, no markdown fences, no preamble. Include the persona name and the user's description in the prompt. Validate the response against the schema (use zod or equivalent); on validation failure, retry once with the error appended, then fall back to the secondary LLM.
+Cache — persist the generated traits to persona_traits and mark the persona source as "llm_generated", so the next lookup is a pure DB read. Never call the LLM at call-time for traits.
+3. UI — upgrade the Persona tab
+Persona Library grid: cards for each persona showing name, source badge (Library / AI-Generated / Manual), version, active status. Actions: Activate, Edit, Regenerate, Delete, Duplicate.
+"New Persona" flow: user enters name + optional description → clicks "Generate Traits" → show a loading state ("Researching persona traits…") → render the generated profile for review before saving.
+Trait Editor: full editor for the JSON profile, but as friendly controls, not raw JSON:
+Sliders (1–10) for warmth, formality, energy, empathy, verbosity
+Tag-style editors for jargon, greeting phrases, forbidden phrases, do/dont rules
+Dropdowns for pace, pitch, interrupt tolerance, silence strategy
+Free-text areas for backstory and escalation rule
+Every manual edit bumps the version and sets source to "manual" on that version
+"Refine with AI" button: user types an instruction like "make her warmer and less formal, add spa-related jargon" → system sends current traits + instruction to the LLM → returns updated JSON → shows a diff-style before/after for approval.
+Preview panel: a "Test Persona" chat box that runs 3–4 sample exchanges using the composed system prompt so the user can feel the persona before going live.
+4. Runtime injection
+
+Create a PersonaComposer module used at call setup:
+
+Merges the active persona's traits into the bot's system prompt in clearly labeled sections (IDENTITY, LANGUAGE STYLE, TONE, BEHAVIOR RULES). Tone integers should be translated into natural-language guidance (e.g., warmth 8 → "very warm and welcoming; use the caller's name").
+Applies the voice block to TTS settings (Deepgram voice hint, pace, pitch) — if the hinted voice is unavailable, fall back to the currently configured voice and log a warning.
+Applies interrupt_tolerance and silence_strategy to the existing Conversation settings for that call (persona overrides tab defaults, but only for calls using that persona).
+The composed system prompt must be logged (per call) so it can be audited from the Call Log detail view.
+5. Seed data
+
+Pre-seed the library with 5 personas with complete trait profiles: Hotel Receptionist, Hospital Appointment Desk, Bank Customer Care, E-commerce Order Support, and Debt Collection Agent (firm but compliant). These act as templates users can duplicate.
+
+6. Constraints
+Do not break any existing pages (Dashboard, Call Log, Bot Network, Flow Builder, Knowledge Base, Messaging Hub, Calendar).
+Reuse the existing LLM Engine configuration (primary/fallback chain, temperature, timeout) for all persona-generation calls.
+All LLM calls for trait generation must have a 30s timeout and surface errors in the UI with a Retry button — never leave the user on an infinite spinner.
+API keys and secrets must never be echoed back in any persona-related API response.
+Build this incrementally in this order and confirm each step compiles before moving on: (1) schema + migrations, (2) trait resolution service, (3) Persona tab UI, (4) PersonaComposer runtime injection, (5) seed data, (6) Refine-with-AI and Preview panel.
