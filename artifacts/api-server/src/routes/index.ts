@@ -9,6 +9,7 @@ import calendarRouter from "./calendar";
 import messagingRouter from "./messaging";
 import apiKeysRouter from "./api-keys";
 import flowRouter from "./flow";
+import emailAgentRouter from "./email-agent";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(calendarRouter);
 router.use(messagingRouter);
 router.use(apiKeysRouter);
 router.use(flowRouter);
+router.use(emailAgentRouter);
 
 export default router;

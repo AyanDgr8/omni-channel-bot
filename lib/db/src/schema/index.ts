@@ -7,3 +7,5 @@ export * from "./memory_entries";
 export * from "./calendar_invites";
 export * from "./message_logs";
 export * from "./flow_configs";
+export * from "./email_agent_config";
+export * from "./writing_style_profiles";

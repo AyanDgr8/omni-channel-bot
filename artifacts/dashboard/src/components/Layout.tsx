@@ -10,6 +10,7 @@ import {
   Calendar,
   Radio,
   GitBranch,
+  MailOpen,
 } from "lucide-react";
 
 const nav = [
@@ -19,6 +20,7 @@ const nav = [
   { href: "/config", label: "Configuration", icon: Settings },
   { href: "/memory", label: "Knowledge Base", icon: Brain },
   { href: "/flow", label: "Flow Builder", icon: GitBranch },
+  { href: "/email-agent", label: "Email Agent", icon: MailOpen },
   { href: "/messaging", label: "Messaging Hub", icon: MessageSquare },
   { href: "/calendar", label: "Calendar", icon: Calendar },
 ];
