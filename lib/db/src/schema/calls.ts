@@ -33,6 +33,12 @@ export const callsTable = pgTable("calls", {
   /** Final call disposition set by the call-connect state machine */
   finalDisposition: text("final_disposition"),
 
+  // ── Persona Audit ──────────────────────────────────────────────────────────
+  /** ID of the persona that was active when this call started */
+  personaId: text("persona_id"),
+  /** Fully-composed system prompt injected for this call */
+  composedPrompt: text("composed_prompt"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

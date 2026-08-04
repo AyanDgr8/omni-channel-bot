@@ -60,6 +60,8 @@ export const CallShape = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   ...CallIntelligenceFields,
 })
@@ -123,26 +125,7 @@ export const TransferCallBody = zod.object({
   "waitTimeoutSeconds": zod.number().default(transferCallBodyWaitTimeoutSecondsDefault)
 })
 
-export const TransferCallResponse = zod.object({
-  "id": zod.string(),
-  "botId": zod.string(),
-  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
-  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
-  "customerNumber": zod.string().nullish(),
-  "customerName": zod.string().nullish(),
-  "startedAt": zod.coerce.date().nullish(),
-  "endedAt": zod.coerce.date().nullish(),
-  "durationSeconds": zod.number().nullish(),
-  "hangupReason": zod.string().nullish(),
-  "sipCode": zod.number().nullish(),
-  "amdResult": zod.string().nullish(),
-  "languageDetected": zod.string().nullish(),
-  "recordingUrl": zod.string().nullish(),
-  "summary": zod.string().nullish(),
-  "transferTarget": zod.string().nullish(),
-  "followUpSent": zod.boolean().optional(),
-  "createdAt": zod.coerce.date()
-})
+export const TransferCallResponse = CallShape
 
 
 /**
@@ -159,26 +142,7 @@ export const ConferenceCallBody = zod.object({
   "dropBotAfterConnect": zod.boolean().default(conferenceCallBodyDropBotAfterConnectDefault)
 })
 
-export const ConferenceCallResponse = zod.object({
-  "id": zod.string(),
-  "botId": zod.string(),
-  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
-  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
-  "customerNumber": zod.string().nullish(),
-  "customerName": zod.string().nullish(),
-  "startedAt": zod.coerce.date().nullish(),
-  "endedAt": zod.coerce.date().nullish(),
-  "durationSeconds": zod.number().nullish(),
-  "hangupReason": zod.string().nullish(),
-  "sipCode": zod.number().nullish(),
-  "amdResult": zod.string().nullish(),
-  "languageDetected": zod.string().nullish(),
-  "recordingUrl": zod.string().nullish(),
-  "summary": zod.string().nullish(),
-  "transferTarget": zod.string().nullish(),
-  "followUpSent": zod.boolean().optional(),
-  "createdAt": zod.coerce.date()
-})
+export const ConferenceCallResponse = CallShape
 
 
 /**
@@ -689,5 +653,3 @@ export const ListMessageLogsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListMessageLogsResponse = zod.array(ListMessageLogsResponseItem)
-
-

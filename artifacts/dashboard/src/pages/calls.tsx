@@ -1,4 +1,5 @@
 import { useState } from "react";
+import React from "react";
 import {
   useListCalls,
   useListBots,
@@ -7,20 +8,32 @@ import {
   getListCallsQueryKey,
 } from "@workspace/api-client-react";
 import type { CallList } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import React from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PhoneCall, PhoneOff, Plus, RefreshCw,
   ChevronDown, ChevronRight, MicOff, Globe, CheckCircle2,
-  PhoneIncoming, PhoneOutgoing,
+  PhoneIncoming, PhoneOutgoing, Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function api(path: string) {
+  const r = await fetch(`${BASE}${path}`);
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+interface PersonaDetail {
+  id: string;
+  name: string;
+  version: number;
+}
 
 const statusColors: Record<string, string> = {
   INITIATING:  "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
@@ -31,11 +44,11 @@ const statusColors: Record<string, string> = {
 };
 
 const connectOutcomeConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  HUMAN:            { label: "Human",        color: "bg-accent/15 text-accent",          icon: CheckCircle2 },
-  ANSWERING_MACHINE:{ label: "Voicemail",    color: "bg-yellow-500/15 text-yellow-400",  icon: MicOff },
-  IVR:              { label: "IVR / System", color: "bg-purple-500/15 text-purple-400",  icon: PhoneCall },
-  SILENCE:          { label: "Silence",      color: "bg-muted text-muted-foreground",    icon: MicOff },
-  NO_RESPONSE:      { label: "No Response",  color: "bg-destructive/15 text-destructive",icon: MicOff },
+  HUMAN:            { label: "Human",        color: "bg-accent/15 text-accent",           icon: CheckCircle2 },
+  ANSWERING_MACHINE:{ label: "Voicemail",    color: "bg-yellow-500/15 text-yellow-400",   icon: MicOff },
+  IVR:              { label: "IVR / System", color: "bg-purple-500/15 text-purple-400",   icon: PhoneCall },
+  SILENCE:          { label: "Silence",      color: "bg-muted text-muted-foreground",     icon: MicOff },
+  NO_RESPONSE:      { label: "No Response",  color: "bg-destructive/15 text-destructive", icon: MicOff },
 };
 
 // Legacy amd labels (kept for old rows)
@@ -60,88 +73,139 @@ function fmtDate(d: string | Date | null | undefined) {
 
 type CallRow = CallList["calls"][0];
 
+function PersonaInfo({ personaId, composedPrompt }: { personaId: string; composedPrompt?: string | null }) {
+  const [promptOpen, setPromptOpen] = useState(false);
+  const { data: persona } = useQuery<PersonaDetail>({
+    queryKey: ["persona-detail-call", personaId],
+    queryFn: () => api(`/api/v1/personas/${personaId}`),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] text-foreground">
+        <Bot className="w-3 h-3 text-primary shrink-0" />
+        <span className="font-medium">Persona:</span>
+        <span>{persona ? `${persona.name} (v${persona.version})` : personaId}</span>
+      </div>
+      {composedPrompt && (
+        <div>
+          <button
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setPromptOpen((o) => !o)}
+          >
+            {promptOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            View System Prompt
+          </button>
+          {promptOpen && (
+            <pre className="mt-2 p-3 rounded bg-muted/50 border border-border text-[11px] text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto">
+              {composedPrompt}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CallDetailPanel({ call }: { call: CallRow }) {
   const connectCfg = connectOutcomeConfig[(call as any).connectOutcome as string];
   const ConnectIcon = connectCfg?.icon ?? CheckCircle2;
   const langSwitches: Array<{ from: string; to: string; at: string }> = (call as any).languageSwitches ?? [];
+  const personaId = (call as any).personaId as string | null | undefined;
+  const composedPrompt = (call as any).composedPrompt as string | null | undefined;
 
   return (
-    <div className="bg-muted/30 border-t border-border px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-[11px]">
-      {/* Connect Outcome */}
-      <div className="space-y-0.5">
-        <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Connect Outcome</p>
-        {(call as any).connectOutcome ? (
-          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${connectCfg?.color ?? "bg-muted text-muted-foreground"}`}>
-            <ConnectIcon className="w-3 h-3" />
-            {connectCfg?.label ?? (call as any).connectOutcome}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </div>
-
-      {/* Final Disposition */}
-      <div className="space-y-0.5">
-        <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Disposition</p>
-        <span className={`font-medium ${(call as any).finalDisposition === "COMPLETED" ? "text-accent" : (call as any).finalDisposition ? "text-foreground" : "text-muted-foreground"}`}>
-          {(call as any).finalDisposition ?? "—"}
-        </span>
-      </div>
-
-      {/* Interruptions */}
-      <div className="space-y-0.5">
-        <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Barge-ins</p>
-        <span className={`font-medium tabular-nums ${((call as any).interruptionCount ?? 0) > 0 ? "text-yellow-400" : "text-muted-foreground"}`}>
-          {(call as any).interruptionCount ?? 0}
-        </span>
-      </div>
-
-      {/* Escalations */}
-      <div className="space-y-0.5">
-        <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Escalations</p>
-        <span className={`font-medium tabular-nums ${((call as any).escalationCount ?? 0) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-          {(call as any).escalationCount ?? 0}
-        </span>
-      </div>
-
-      {/* Language */}
-      <div className="space-y-0.5">
-        <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Language</p>
-        <span className="text-foreground flex items-center gap-1">
-          <Globe className="w-3 h-3 text-muted-foreground" />
-          {call.languageDetected?.toUpperCase() ?? "—"}
-        </span>
-      </div>
-
-      {/* Language switches */}
-      <div className="space-y-0.5">
-        <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Lang Switches</p>
-        {langSwitches.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {langSwitches.map((sw, i) => (
-              <span key={i} className="bg-primary/10 text-primary px-1 py-0.5 rounded text-[10px] font-mono">
-                {sw.from.toUpperCase()} → {sw.to.toUpperCase()}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span className="text-muted-foreground">None</span>
-        )}
-      </div>
-
-      {/* Transfer target */}
-      {call.transferTarget && (
+    <div className="bg-muted/30 border-t border-border px-4 py-3 space-y-3 text-[11px]">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+        {/* Connect Outcome */}
         <div className="space-y-0.5">
-          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Transferred To</p>
-          <span className="font-mono text-foreground">{call.transferTarget}</span>
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Connect Outcome</p>
+          {(call as any).connectOutcome ? (
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${connectCfg?.color ?? "bg-muted text-muted-foreground"}`}>
+              <ConnectIcon className="w-3 h-3" />
+              {connectCfg?.label ?? (call as any).connectOutcome}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
         </div>
-      )}
+
+        {/* Final Disposition */}
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Disposition</p>
+          <span className={`font-medium ${(call as any).finalDisposition === "COMPLETED" ? "text-accent" : (call as any).finalDisposition ? "text-foreground" : "text-muted-foreground"}`}>
+            {(call as any).finalDisposition ?? "—"}
+          </span>
+        </div>
+
+        {/* Interruptions */}
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Barge-ins</p>
+          <span className={`font-medium tabular-nums ${((call as any).interruptionCount ?? 0) > 0 ? "text-yellow-400" : "text-muted-foreground"}`}>
+            {(call as any).interruptionCount ?? 0}
+          </span>
+        </div>
+
+        {/* Escalations */}
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Escalations</p>
+          <span className={`font-medium tabular-nums ${((call as any).escalationCount ?? 0) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+            {(call as any).escalationCount ?? 0}
+          </span>
+        </div>
+
+        {/* Language */}
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Language</p>
+          <span className="text-foreground flex items-center gap-1">
+            <Globe className="w-3 h-3 text-muted-foreground" />
+            {call.languageDetected?.toUpperCase() ?? "—"}
+          </span>
+        </div>
+
+        {/* Language switches */}
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Lang Switches</p>
+          {langSwitches.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {langSwitches.map((sw, i) => (
+                <span key={i} className="bg-primary/10 text-primary px-1 py-0.5 rounded text-[10px] font-mono">
+                  {sw.from.toUpperCase()} → {sw.to.toUpperCase()}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">None</span>
+          )}
+        </div>
+
+        {/* Transfer target */}
+        {call.transferTarget && (
+          <div className="space-y-0.5">
+            <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Transferred To</p>
+            <span className="font-mono text-foreground">{call.transferTarget}</span>
+          </div>
+        )}
+      </div>
 
       {/* Summary */}
       {call.summary && (
-        <div className="space-y-0.5 col-span-full">
+        <div className="space-y-0.5">
           <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">Summary</p>
           <p className="text-foreground">{call.summary}</p>
+        </div>
+      )}
+
+      {/* Persona */}
+      {personaId ? (
+        <div className="pt-2 border-t border-border/60">
+          <PersonaInfo personaId={personaId} composedPrompt={composedPrompt} />
+        </div>
+      ) : (
+        <div className="pt-2 border-t border-border/60 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Bot className="w-3 h-3 shrink-0" />
+          No persona was active when this call started.
         </div>
       )}
     </div>
@@ -220,7 +284,7 @@ export default function Calls() {
           <thead>
             <tr className="border-b border-border">
               <th className="w-8 px-2 py-2.5" />
-              {["Direction", "Number", "Status", "Connect", "Duration", "Disposition", "Lang", "Started"].map((h) => (
+              {["Direction", "Number", "Status", "Connect", "Duration", "Disposition", "Lang", "Persona", "Started"].map((h) => (
                 <th key={h} className="text-left px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
               <th className="px-3 py-2.5" />
@@ -228,9 +292,9 @@ export default function Calls() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">Loading...</td></tr>
             ) : calls.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">No calls yet. Dial one to get started.</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">No calls yet. Dial one to get started.</td></tr>
             ) : (
               calls.map((call) => {
                 const isExpanded = expandedRow === call.id;
@@ -238,6 +302,7 @@ export default function Calls() {
                 const connectCfg = connectOutcome ? connectOutcomeConfig[connectOutcome] : null;
                 const ConnectIcon = connectCfg?.icon;
                 const isInbound = call.direction === "INBOUND";
+                const hasPersona = !!(call as any).personaId;
 
                 return (
                   <React.Fragment key={call.id}>
@@ -279,6 +344,16 @@ export default function Calls() {
                         {(call as any).finalDisposition ?? call.hangupReason ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground">{call.languageDetected?.toUpperCase() ?? "—"}</td>
+                      <td className="px-3 py-2.5">
+                        {hasPersona ? (
+                          <span className="inline-flex items-center gap-1 text-primary">
+                            <Bot className="w-3 h-3 shrink-0" />
+                            <span className="text-[10px] font-medium">Active</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-[10px]">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{fmtDate(call.startedAt)}</td>
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         {(call.status === "IN_PROGRESS" || call.status === "RINGING") && (
@@ -294,7 +369,7 @@ export default function Calls() {
                     </tr>
                     {isExpanded && (
                       <tr className="border-b border-border/50">
-                        <td colSpan={10} className="p-0">
+                        <td colSpan={11} className="p-0">
                           <CallDetailPanel call={call} />
                         </td>
                       </tr>

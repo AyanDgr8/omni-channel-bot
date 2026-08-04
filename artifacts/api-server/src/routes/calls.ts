@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
-import { db, callsTable, botsTable } from "@workspace/db";
-import { runCallConnectSimulation, loadBotCallConfig } from "../lib/call-connect-service";
+import { db, callsTable, botsTable, personasTable, personaTraitsTable } from "@workspace/db";
+import { runCallConnectSimulation, loadBotCallConfig } from "../lib/call-connect-service.js";
 import {
   ListCallsResponse,
   GetCallResponse,
@@ -15,6 +15,7 @@ import {
   ListCallsQueryParams,
 } from "@workspace/api-zod";
 import { randomUUID } from "crypto";
+import { composeSystemPrompt } from "../lib/persona-composer.js";
 
 const router: IRouter = Router();
 
@@ -60,6 +61,31 @@ router.post("/v1/calls/dial", async (req, res): Promise<void> => {
     return;
   }
 
+  // Fetch active persona and compose system prompt for call stamping
+  let activePersonaId: string | null = null;
+  let activeComposedPrompt: string | null = null;
+  try {
+    const [activePersona] = await db
+      .select()
+      .from(personasTable)
+      .where(eq(personasTable.isActive, true))
+      .limit(1);
+    if (activePersona) {
+      const [traitsRow] = await db
+        .select()
+        .from(personaTraitsTable)
+        .where(eq(personaTraitsTable.personaId, activePersona.id))
+        .orderBy(desc(personaTraitsTable.version))
+        .limit(1);
+      if (traitsRow) {
+        activePersonaId = activePersona.id;
+        activeComposedPrompt = composeSystemPrompt(traitsRow.traits);
+      }
+    }
+  } catch {
+    // Non-fatal: proceed without persona stamping
+  }
+
   const callId = randomUUID();
   const [call] = await db
     .insert(callsTable)
@@ -71,6 +97,8 @@ router.post("/v1/calls/dial", async (req, res): Promise<void> => {
       customerNumber: parsed.data.to,
       startedAt: new Date(),
       followUpSent: false,
+      personaId: activePersonaId,
+      composedPrompt: activeComposedPrompt,
     })
     .returning();
 
@@ -92,7 +120,7 @@ router.post("/v1/calls/dial", async (req, res): Promise<void> => {
 
       if (botConfig) {
         const result = await runCallConnectSimulation(callId, botConfig, bot.displayName);
-        const dur = result.outcome === "HUMAN" ? 30 + Math.floor(Math.random() * 180) : 5 + Math.floor(Math.random() * 15);
+        const dur = 30 + Math.floor(Math.random() * 180);
         await db
           .update(callsTable)
           .set({
