@@ -28,6 +28,12 @@ export const CallStatus = {
   FAILED: 'FAILED',
 } as const;
 
+export interface LanguageSwitchEvent {
+  from: string;
+  to: string;
+  at: string;
+}
+
 export interface Call {
   id: string;
   botId: string;
@@ -59,6 +65,14 @@ export interface Call {
   transferTarget?: string | null;
   followUpSent?: boolean;
   createdAt: string;
+  // ── Call-Connect Intelligence ─────────────────────────────────────────
+  /** HUMAN | ANSWERING_MACHINE | IVR | SILENCE | NO_RESPONSE */
+  connectOutcome?: string | null;
+  interruptionCount?: number;
+  escalationCount?: number;
+  languageSwitches?: LanguageSwitchEvent[] | null;
+  /** Final disposition written by call-connect state machine */
+  finalDisposition?: string | null;
 }
 
 export interface CallList {
@@ -152,6 +166,16 @@ export interface Bot {
   status: BotStatus;
   activeCalls?: number;
   createdAt: string;
+  // ── Call Direction System ─────────────────────────────────────────────
+  direction?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  directionConfig?: Record<string, any> | null;
+  supportedLanguages?: string[];
+  defaultGreetingLanguage?: string;
+  timezone?: string;
+  endpointSilenceMs?: number;
+  backchannelThresholdMs?: number;
+  silenceRecoverySecs?: number;
 }
 
 export interface BotInput {
@@ -163,6 +187,15 @@ export interface BotInput {
   sipDomain?: string | null;
   /** @nullable */
   whatsappNumber?: string | null;
+  direction?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  directionConfig?: Record<string, any> | null;
+  supportedLanguages?: string[];
+  defaultGreetingLanguage?: string;
+  timezone?: string;
+  endpointSilenceMs?: number;
+  backchannelThresholdMs?: number;
+  silenceRecoverySecs?: number;
 }
 
 export type BotUpdateStatus = typeof BotUpdateStatus[keyof typeof BotUpdateStatus];
@@ -185,6 +218,15 @@ export interface BotUpdate {
   /** @nullable */
   whatsappNumber?: string | null;
   status?: BotUpdateStatus;
+  direction?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  directionConfig?: Record<string, any> | null;
+  supportedLanguages?: string[];
+  defaultGreetingLanguage?: string;
+  timezone?: string;
+  endpointSilenceMs?: number;
+  backchannelThresholdMs?: number;
+  silenceRecoverySecs?: number;
 }
 
 export type PersonaConfigCharacter = typeof PersonaConfigCharacter[keyof typeof PersonaConfigCharacter];

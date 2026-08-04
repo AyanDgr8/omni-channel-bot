@@ -10,6 +10,7 @@ import messagingRouter from "./messaging";
 import apiKeysRouter from "./api-keys";
 import flowRouter from "./flow";
 import emailAgentRouter from "./email-agent";
+import personasRouter from "./personas";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(messagingRouter);
 router.use(apiKeysRouter);
 router.use(flowRouter);
 router.use(emailAgentRouter);
+router.use(personasRouter);
 
 export default router;

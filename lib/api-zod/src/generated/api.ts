@@ -30,8 +30,19 @@ export const ListCallsQueryParams = zod.object({
   "botId": zod.coerce.string().optional()
 })
 
-export const ListCallsResponse = zod.object({
-  "calls": zod.array(zod.object({
+export const CallIntelligenceFields = {
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().default(0),
+  "escalationCount": zod.number().default(0),
+  "languageSwitches": zod.array(zod.object({
+    "from": zod.string(),
+    "to": zod.string(),
+    "at": zod.string(),
+  })).nullish(),
+  "finalDisposition": zod.string().nullish(),
+}
+
+export const CallShape = zod.object({
   "id": zod.string(),
   "botId": zod.string(),
   "direction": zod.enum(['INBOUND', 'OUTBOUND']),
@@ -49,8 +60,12 @@ export const ListCallsResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
-  "createdAt": zod.coerce.date()
-})),
+  "createdAt": zod.coerce.date(),
+  ...CallIntelligenceFields,
+})
+
+export const ListCallsResponse = zod.object({
+  "calls": zod.array(CallShape),
   "total": zod.number()
 })
 
@@ -77,26 +92,7 @@ export const GetCallParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const GetCallResponse = zod.object({
-  "id": zod.string(),
-  "botId": zod.string(),
-  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
-  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
-  "customerNumber": zod.string().nullish(),
-  "customerName": zod.string().nullish(),
-  "startedAt": zod.coerce.date().nullish(),
-  "endedAt": zod.coerce.date().nullish(),
-  "durationSeconds": zod.number().nullish(),
-  "hangupReason": zod.string().nullish(),
-  "sipCode": zod.number().nullish(),
-  "amdResult": zod.string().nullish(),
-  "languageDetected": zod.string().nullish(),
-  "recordingUrl": zod.string().nullish(),
-  "summary": zod.string().nullish(),
-  "transferTarget": zod.string().nullish(),
-  "followUpSent": zod.boolean().optional(),
-  "createdAt": zod.coerce.date()
-})
+export const GetCallResponse = CallShape
 
 
 /**
@@ -106,26 +102,7 @@ export const HangupCallParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const HangupCallResponse = zod.object({
-  "id": zod.string(),
-  "botId": zod.string(),
-  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
-  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
-  "customerNumber": zod.string().nullish(),
-  "customerName": zod.string().nullish(),
-  "startedAt": zod.coerce.date().nullish(),
-  "endedAt": zod.coerce.date().nullish(),
-  "durationSeconds": zod.number().nullish(),
-  "hangupReason": zod.string().nullish(),
-  "sipCode": zod.number().nullish(),
-  "amdResult": zod.string().nullish(),
-  "languageDetected": zod.string().nullish(),
-  "recordingUrl": zod.string().nullish(),
-  "summary": zod.string().nullish(),
-  "transferTarget": zod.string().nullish(),
-  "followUpSent": zod.boolean().optional(),
-  "createdAt": zod.coerce.date()
-})
+export const HangupCallResponse = CallShape
 
 
 /**
@@ -246,6 +223,17 @@ export const GetHangupReasonsResponse = zod.array(GetHangupReasonsResponseItem)
  */
 export const listBotsResponseActiveCallsDefault = 0;
 
+export const BotDirectionFields = {
+  "direction": zod.enum(['inbound', 'outbound']).default('inbound'),
+  "directionConfig": zod.record(zod.string(), zod.unknown()).nullish(),
+  "supportedLanguages": zod.array(zod.string()).default(['en']),
+  "defaultGreetingLanguage": zod.string().default('en'),
+  "timezone": zod.string().default('UTC'),
+  "endpointSilenceMs": zod.number().default(1200),
+  "backchannelThresholdMs": zod.number().default(700),
+  "silenceRecoverySecs": zod.number().default(6),
+}
+
 export const ListBotsResponseItem = zod.object({
   "id": zod.string(),
   "displayName": zod.string(),
@@ -255,7 +243,8 @@ export const ListBotsResponseItem = zod.object({
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']),
   "activeCalls": zod.number().default(listBotsResponseActiveCallsDefault),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  ...BotDirectionFields,
 })
 export const ListBotsResponse = zod.array(ListBotsResponseItem)
 
@@ -268,7 +257,15 @@ export const CreateBotBody = zod.object({
   "email": zod.string().nullish(),
   "sipExtension": zod.string(),
   "sipDomain": zod.string().nullish(),
-  "whatsappNumber": zod.string().nullish()
+  "whatsappNumber": zod.string().nullish(),
+  "direction": zod.enum(['inbound', 'outbound']).default('inbound'),
+  "directionConfig": zod.record(zod.string(), zod.unknown()).nullish(),
+  "supportedLanguages": zod.array(zod.string()).default(['en']),
+  "defaultGreetingLanguage": zod.string().default('en'),
+  "timezone": zod.string().default('UTC'),
+  "endpointSilenceMs": zod.number().default(1200),
+  "backchannelThresholdMs": zod.number().default(700),
+  "silenceRecoverySecs": zod.number().default(6),
 })
 
 
@@ -290,7 +287,8 @@ export const GetBotResponse = zod.object({
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']),
   "activeCalls": zod.number().default(getBotResponseActiveCallsDefault),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  ...BotDirectionFields,
 })
 
 
@@ -307,7 +305,15 @@ export const UpdateBotBody = zod.object({
   "sipExtension": zod.string().optional(),
   "sipDomain": zod.string().nullish(),
   "whatsappNumber": zod.string().nullish(),
-  "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']).optional()
+  "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']).optional(),
+  "direction": zod.enum(['inbound', 'outbound']).optional(),
+  "directionConfig": zod.record(zod.string(), zod.unknown()).nullish(),
+  "supportedLanguages": zod.array(zod.string()).optional(),
+  "defaultGreetingLanguage": zod.string().optional(),
+  "timezone": zod.string().optional(),
+  "endpointSilenceMs": zod.number().optional(),
+  "backchannelThresholdMs": zod.number().optional(),
+  "silenceRecoverySecs": zod.number().optional(),
 })
 
 export const updateBotResponseActiveCallsDefault = 0;
@@ -321,7 +327,8 @@ export const UpdateBotResponse = zod.object({
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']),
   "activeCalls": zod.number().default(updateBotResponseActiveCallsDefault),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  ...BotDirectionFields,
 })
 
 

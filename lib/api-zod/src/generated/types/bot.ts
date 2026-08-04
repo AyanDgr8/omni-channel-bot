@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { BotStatus } from './botStatus';
+import type { InboundDirectionConfig, OutboundDirectionConfig } from './directionConfig';
 
 export interface Bot {
   id: string;
@@ -20,4 +21,20 @@ export interface Bot {
   status: BotStatus;
   activeCalls?: number;
   createdAt: Date;
+
+  // ── Call Direction System ─────────────────────────────────────────────
+  /** "inbound" | "outbound" */
+  direction?: string;
+  /** @nullable */
+  directionConfig?: InboundDirectionConfig | OutboundDirectionConfig | null;
+  /** ISO 639-1 codes */
+  supportedLanguages?: string[];
+  defaultGreetingLanguage?: string;
+  /** IANA timezone */
+  timezone?: string;
+
+  // ── Conversation tunables ─────────────────────────────────────────────
+  endpointSilenceMs?: number;
+  backchannelThresholdMs?: number;
+  silenceRecoverySecs?: number;
 }

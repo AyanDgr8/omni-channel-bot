@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, callsTable, botsTable } from "@workspace/db";
+import { runCallConnectSimulation, loadBotCallConfig } from "../lib/call-connect-service";
 import {
   ListCallsResponse,
   GetCallResponse,
@@ -75,23 +76,66 @@ router.post("/v1/calls/dial", async (req, res): Promise<void> => {
 
   await db.update(botsTable).set({ status: "BUSY", activeCalls: bot.activeCalls + 1 }).where(eq(botsTable.id, bot.id));
 
+  // Run call-connect simulation asynchronously using the bot's direction config
   setTimeout(async () => {
-    const outcomes = ["COMPLETED", "NO_ANSWER", "BUSY", "VOICEMAIL_LEFT"];
-    const hangupReasons = ["BOT_HUNGUP", "NO_ANSWER", "BUSY", "VOICEMAIL_LEFT"];
-    const amdResults = ["HUMAN", "VOICEMAIL", "IVR"];
-    const idx = Math.floor(Math.random() * 4);
-    const dur = 30 + Math.floor(Math.random() * 180);
-    await db
-      .update(callsTable)
-      .set({
-        status: idx === 0 ? "COMPLETED" : "COMPLETED",
-        hangupReason: hangupReasons[idx],
-        amdResult: amdResults[Math.floor(Math.random() * 3)],
-        durationSeconds: dur,
-        endedAt: new Date(),
-        summary: idx === 0 ? "Call completed successfully. Customer engaged and provided information." : null,
-      })
-      .where(eq(callsTable.id, callId));
+    try {
+      const botConfig = await loadBotCallConfig(parsed.data.botId);
+      const hangupReasonMap: Record<string, string> = {
+        COMPLETED: "BOT_HUNGUP",
+        VOICEMAIL_LEFT: "VOICEMAIL_LEFT",
+        AMD_HANGUP: "NO_ANSWER",
+        NO_RESPONSE: "NO_ANSWER",
+        FAILED: "FAILED",
+        TRANSFERRED: "TRANSFERRED",
+        LANGUAGE_UNSUPPORTED: "BOT_HUNGUP",
+      };
+
+      if (botConfig) {
+        const result = await runCallConnectSimulation(callId, botConfig, bot.displayName);
+        const dur = result.outcome === "HUMAN" ? 30 + Math.floor(Math.random() * 180) : 5 + Math.floor(Math.random() * 15);
+        await db
+          .update(callsTable)
+          .set({
+            status: "COMPLETED",
+            hangupReason: hangupReasonMap[result.disposition] ?? "BOT_HUNGUP",
+            amdResult: result.amdResult ?? (result.outcome === "HUMAN" ? "HUMAN" : result.outcome),
+            languageDetected: result.greetingLanguage,
+            durationSeconds: dur,
+            endedAt: new Date(),
+            connectOutcome: result.outcome,
+            interruptionCount: result.interruptionCount,
+            escalationCount: result.escalationCount,
+            languageSwitches: result.languageSwitches.length > 0 ? result.languageSwitches : null,
+            finalDisposition: result.disposition,
+            summary: result.outcome === "HUMAN"
+              ? `Call completed. Greeted in ${result.greetingLanguage}. ${result.interruptionCount} barge-in(s) detected.${result.escalationCount > 0 ? " Escalation triggered." : ""}`
+              : result.outcome === "ANSWERING_MACHINE"
+                ? `Voicemail detected — ${result.disposition === "VOICEMAIL_LEFT" ? "left a voicemail message" : "hung up"}.`
+                : `Call ended: ${result.outcome}.`,
+          })
+          .where(eq(callsTable.id, callId));
+      } else {
+        // Fallback if bot config not found
+        const dur = 30 + Math.floor(Math.random() * 180);
+        await db
+          .update(callsTable)
+          .set({
+            status: "COMPLETED",
+            hangupReason: "BOT_HUNGUP",
+            amdResult: "HUMAN",
+            durationSeconds: dur,
+            endedAt: new Date(),
+            connectOutcome: "HUMAN",
+            interruptionCount: 0,
+            escalationCount: 0,
+            finalDisposition: "COMPLETED",
+          })
+          .where(eq(callsTable.id, callId));
+      }
+    } catch (err) {
+      console.error("Call simulation error:", err);
+    }
+
     const currentBot = await db.select().from(botsTable).where(eq(botsTable.id, parsed.data.botId));
     if (currentBot[0]) {
       await db
@@ -99,7 +143,7 @@ router.post("/v1/calls/dial", async (req, res): Promise<void> => {
         .set({ status: "ONLINE", activeCalls: Math.max(0, currentBot[0].activeCalls - 1) })
         .where(eq(botsTable.id, parsed.data.botId));
     }
-  }, 5000);
+  }, 4000 + Math.floor(Math.random() * 3000));
 
   res.status(201).json(GetCallResponse.parse(call));
 });

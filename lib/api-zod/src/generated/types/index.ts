@@ -7,6 +7,7 @@
  */
 
 export * from './bot';
+export * from './directionConfig';
 export * from './botInput';
 export * from './botStatus';
 export * from './botUpdate';

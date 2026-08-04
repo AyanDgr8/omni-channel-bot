@@ -9,3 +9,5 @@ export * from "./message_logs";
 export * from "./flow_configs";
 export * from "./email_agent_config";
 export * from "./writing_style_profiles";
+export * from "./personas";
+export * from "./persona_traits";

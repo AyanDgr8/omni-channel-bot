@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -20,6 +20,19 @@ export const callsTable = pgTable("calls", {
   summary: text("summary"),
   transferTarget: text("transfer_target"),
   followUpSent: boolean("follow_up_sent").notNull().default(false),
+
+  // ── Call-Connect Intelligence ──────────────────────────────────────────────
+  /** Outcome of the call-connect handler: HUMAN | ANSWERING_MACHINE | IVR | SILENCE | NO_RESPONSE */
+  connectOutcome: text("connect_outcome"),
+  /** Number of times the caller barges in while the bot is speaking */
+  interruptionCount: integer("interruption_count").notNull().default(0),
+  /** Number of escalation triggers detected during the call */
+  escalationCount: integer("escalation_count").notNull().default(0),
+  /** JSON array of language-switch events: [{from, to, at}] */
+  languageSwitches: jsonb("language_switches"),
+  /** Final call disposition set by the call-connect state machine */
+  finalDisposition: text("final_disposition"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

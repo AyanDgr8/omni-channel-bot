@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import PersonaEngine from "./persona-engine";
 import {
   useGetPersonaConfig,
   useUpdatePersonaConfig,
@@ -18,7 +19,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Key, CheckCircle2, XCircle, Loader2, RefreshCw } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, Loader2, RefreshCw, Play } from "lucide-react";
 
 function SliderField({ label, value, onChange, min = 0, max = 1, step = 0.01, fmt = (v: number) => v.toFixed(2) }: {
   label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; fmt?: (v: number) => string;
@@ -101,55 +102,7 @@ export default function Config() {
         </TabsList>
 
         <TabsContent value="persona" className="mt-4">
-          <div className="bg-card border border-card-border rounded p-5 space-y-5 max-w-xl">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Character</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {chars.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setP((x: any) => ({ ...x, character: c }))}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium border transition-colors capitalize ${p.character === c ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/50"}`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <SliderField label="Formality" value={p.formality} onChange={(v) => setP((x: any) => ({ ...x, formality: v }))} />
-            <SliderField label="Verbosity" value={p.verbosity} onChange={(v) => setP((x: any) => ({ ...x, verbosity: v }))} />
-            <SliderField label="Empathy Level" value={p.empathyLevel} onChange={(v) => setP((x: any) => ({ ...x, empathyLevel: v }))} />
-            <SliderField label="Humor Level" value={p.humorLevel} onChange={(v) => setP((x: any) => ({ ...x, humorLevel: v }))} />
-            <SliderField label="Speaking Rate" value={p.speakingRate} onChange={(v) => setP((x: any) => ({ ...x, speakingRate: v }))} min={0.5} max={2.0} fmt={(v) => `${v.toFixed(1)}x`} />
-            <SliderField label="Pitch" value={p.pitch} onChange={(v) => setP((x: any) => ({ ...x, pitch: v }))} min={-20} max={20} step={1} fmt={(v) => `${v > 0 ? "+" : ""}${v}st`} />
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Greeting Style</Label>
-                <Select value={p.greetingStyle} onValueChange={(v) => setP((x: any) => ({ ...x, greetingStyle: v }))}>
-                  <SelectTrigger className="text-xs mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{greetings.map((g) => <SelectItem key={g} value={g} className="text-xs capitalize">{g}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Interrupt Mode</Label>
-                <Select value={p.interruptMode} onValueChange={(v) => setP((x: any) => ({ ...x, interruptMode: v }))}>
-                  <SelectTrigger className="text-xs mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{interrupts.map((m) => <SelectItem key={m} value={m} className="text-xs">{m.replace("_", " ")}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between py-1">
-              <Label className="text-xs">Filler Words</Label>
-              <Switch checked={p.fillerWordsEnabled} onCheckedChange={(v) => setP((x: any) => ({ ...x, fillerWordsEnabled: v }))} />
-            </div>
-
-            <Button size="sm" onClick={savePersona} disabled={updatePersona.isPending} className="gap-1.5 text-xs">
-              <Save className="w-3 h-3" /> {updatePersona.isPending ? "Saving..." : "Save Persona"}
-            </Button>
-          </div>
+          <PersonaEngine />
         </TabsContent>
 
         <TabsContent value="conversation" className="mt-4">

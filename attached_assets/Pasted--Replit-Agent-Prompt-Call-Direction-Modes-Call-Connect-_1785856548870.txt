@@ -1,0 +1,121 @@
+# Replit Agent Prompt — Call Direction Modes, Call-Connect Intelligence & Interruption Handling
+
+Copy everything below the line into Replit Agent (Build mode).
+
+---
+
+Extend the voice bot platform with a **Call Direction system**. Every bot agent (in the Bot Network grid) must now be configured as either an **Inbound Agent** or an **Outbound Agent**, with completely separate trait sets and call-handling logic for each. This builds on top of the existing Agentic Persona Engine — direction traits layer on top of persona traits.
+
+## 1. Data model changes
+
+Add to the bot agent schema:
+
+- direction (enum: "inbound" | "outbound") — required
+- direction_config (jsonb) — direction-specific settings, schema below
+- supported_languages (text[]) — list of ISO 639-1 codes the bot can converse in (e.g., ["en", "hi", "ar", "fr"])
+- default_greeting_language (text) — ISO 639-1 code, placeholder configurable in UI
+- timezone (text) — IANA timezone (e.g., "Asia/Kolkata", "Asia/Dubai") used for time-of-day logic; default to the tenant/system timezone
+
+**direction_config schema for INBOUND:**
+```json
+{
+  "greeting": {
+    "time_of_day_variants": {
+      "morning": "Good morning, thank you for calling {company}...",
+      "afternoon": "Good afternoon...",
+      "evening": "Good evening...",
+      "night": "Hello, thank you for calling..."
+    },
+    "time_boundaries": { "morning": "05:00-11:59", "afternoon": "12:00-16:59", "evening": "17:00-20:59", "night": "21:00-04:59" },
+    "ai_disclosure": true,
+    "ai_disclosure_text": "You're speaking with {company}'s virtual assistant."
+  },
+  "queue_behavior": { "max_ring_wait_ms": 30000 },
+  "escalation": { "transfer_number": "", "transfer_on_request": true, "transfer_on_frustration": true }
+}
+```
+
+**direction_config schema for OUTBOUND:**
+```json
+{
+  "amd": {
+    "enabled": true,
+    "detection_window_ms": 4000,
+    "on_machine_detected": {
+      "crm_disposition": "ANSWERING_MACHINE",
+      "voicemail_message_id": "",
+      "wait_for_beep": true,
+      "hangup_after_message": true
+    }
+  },
+  "opening_script": "",
+  "retry_policy": { "max_attempts": 3, "retry_interval_minutes": 60 },
+  "calling_hours": { "start": "09:00", "end": "20:00", "respect_timezone": true }
+}
+```
+
+## 2. Call-Connect Handler (runs on every call, both directions)
+
+Build a state machine that executes when media is established:
+
+**Step 1 — Voice classification (outbound calls, and optionally inbound):**
+- Analyze the first 3–4 seconds of far-end audio to classify: HUMAN | ANSWERING_MACHINE | IVR/MECHANICAL | SILENCE.
+- Detection signals: long uninterrupted speech with no pause (machine greeting), beep tone detection, synthetic/recorded audio characteristics, immediate scripted speech before the bot says anything.
+- If ANSWERING_MACHINE or MECHANICAL:
+  - Write a disposition to the CRM record for this call: mark as "Answering Machine" with timestamp and call ID (create a CRM disposition API endpoint + store in the call log; make the CRM push a pluggable webhook so external CRMs can subscribe).
+  - Wait for the beep (silence after the machine greeting), then play the pre-configured standard announcement (selectable from a new "Voicemail Announcements" library — audio file or TTS text), then hang up cleanly and log the outcome.
+- If HUMAN → proceed to greeting.
+- If SILENCE beyond 5s → say "Hello?" once, wait 3s, then hang up with disposition NO_RESPONSE.
+
+**Step 2 — Greeting (inbound: immediate on answer; outbound: after human confirmed):**
+- Compose the greeting from the time-of-day variant using the bot's configured timezone (never the server's raw clock — always convert through the IANA timezone).
+- Speak it in the **default_greeting_language** (the pre-defined placeholder — UI dropdown of supported languages).
+- If ai_disclosure is enabled, include the disclosure line in the greeting.
+
+**Step 3 — Language detection and switching:**
+- Continuously run language identification on the caller's speech (use the STT provider's language detection; Deepgram supports language detection).
+- If the caller responds in a different language that IS in supported_languages → switch the entire pipeline (STT model, LLM system prompt instruction, TTS voice) to that language and continue naturally. Log the switch.
+- If the caller's language is NOT supported → the bot must say, first briefly in a best-effort phrase and then in English: "I'm sorry, I'm not able to understand your language. Would you be able to continue in English?" If the caller continues in English → proceed. If the caller cannot → politely close the call (or transfer if escalation is configured) and log disposition LANGUAGE_UNSUPPORTED.
+- Never silently ignore an unsupported language — always acknowledge before defaulting.
+
+## 3. Interruption handling (barge-in) — HIGHEST PRIORITY
+
+This is the most important behavior in the whole system. Implement true barge-in:
+
+- **The caller always has right of way.** The moment the caller starts speaking while the bot is talking, cancel TTS playback immediately (within 200ms) — stop mid-sentence, do not finish the phrase, and flush any queued audio.
+- Discard the unspoken remainder of the bot's utterance but keep it in context so the LLM knows what it was saying when interrupted.
+- **Endpointing rule:** after the caller finishes speaking, wait 1000–1500ms of confirmed silence before the bot replies. Make this window configurable per bot (default 1200ms). Use the STT endpointing/utterance-end events, not a naive timer, so background noise doesn't falsely extend or cut the window.
+- Distinguish **backchannels from interruptions**: short affirmations ("hmm", "okay", "yes", "haan", "achha") under ~700ms while the bot is speaking should NOT stop the bot — treat them as listening signals. Only sustained speech (>700ms or containing content words) triggers barge-in.
+- If the caller interrupts with a question, the bot answers the question first, then decides whether the rest of its previous point is still needed — it should not robotically resume the cancelled sentence.
+- Never interrupt the caller. If the caller pauses mid-thought (silence < the endpoint window), keep waiting.
+
+## 4. Conversation intelligence (natural-call best practices)
+
+Build these behaviors into the runtime, exposed as configurable settings where noted:
+
+- **Silence recovery:** if the caller says nothing for N seconds (default 6s, configurable), gently re-prompt once ("Are you still there?" in the active language). After 2 unanswered re-prompts, close politely and log disposition SILENT_DROP.
+- **Latency masking:** whenever a tool call, CRM lookup, calendar check, or knowledge-base search will take >800ms, the bot must first speak a natural filler in the active language ("One moment, let me check that for you") before the result returns.
+- **Repeat & clarify:** if STT confidence is low or the transcript is garbled, ask the caller to repeat — max 2 times for the same item, then offer an alternative (spell it out, transfer, or send a link via the Messaging Hub).
+- **Noise handling:** if sustained background noise degrades recognition, the bot should acknowledge it once ("Sorry, the line is a bit noisy") rather than repeatedly failing.
+- **Frustration & escalation:** detect frustration signals (raised repetition, negative sentiment, explicit "let me talk to a human"). If escalation is enabled, offer transfer immediately on explicit request, and proactively after 2 frustration signals. Log every escalation with reason.
+- **One question at a time:** the bot must never stack multiple questions in a single turn.
+- **Confirmation discipline:** always read back critical data (names, phone numbers, dates, amounts) for confirmation before acting on it.
+- **Turn length:** bot replies in conversation should target 1–2 sentences; long explanations must be broken up with a check-in ("...does that make sense so far?").
+- **Wrap-up:** every call ends with a summary of what was done/agreed, an "anything else?" check, and a polite close in the active language. Write the final disposition + summary to the call log.
+
+## 5. UI changes
+
+- **Bot Network grid:** add a Direction badge (Inbound / Outbound) on each bot card; direction is chosen at bot creation and editable.
+- **Configuration → new "Call Handling" tab** (per bot), with sub-sections that show/hide based on direction:
+  - Inbound: greeting language dropdown (the placeholder), time-of-day greeting text editor with live preview per time band, timezone picker, AI disclosure toggle + text, escalation settings.
+  - Outbound: AMD toggle + settings, voicemail announcement picker (with a small library manager to upload audio or define TTS text), opening script, calling hours, retry policy.
+  - Shared: supported languages multi-select, endpoint silence window slider (800–2000ms, default 1200ms), backchannel threshold, silence recovery timers.
+- **Call Log detail view:** show the connect-handler outcome (Human/Machine/IVR), detected language(s) and any mid-call switch, interruption count, escalations, and final disposition.
+
+## 6. Constraints
+
+- Do not break existing features (Dashboard, Flow Builder, Persona Engine, Knowledge Base, Messaging Hub, Calendar).
+- All new bot speech strings must run through the active language — no hardcoded English in the runtime path.
+- Timezone math must use a proper library (e.g., date-fns-tz or Luxon), never manual offsets.
+- Every disposition and language event must be persisted so the Dashboard KPIs can later chart AMD rate, language mix, and interruption stats.
+- Build incrementally in this order, confirming each step compiles: (1) schema + direction config, (2) call-connect state machine with AMD + CRM disposition, (3) time-of-day multilingual greeting, (4) language detection/switching, (5) barge-in + endpointing, (6) conversation intelligence behaviors, (7) UI Call Handling tab, (8) Call Log detail additions.
