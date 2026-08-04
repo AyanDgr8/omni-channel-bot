@@ -50,6 +50,7 @@ import type {
   MessageResult,
   PersonaConfig,
   PersonaConfigInput,
+  PersonaSummary,
   StatsOverview,
   TelegramMessageInput,
   TimeSlot,
@@ -2445,6 +2446,230 @@ export const useSendEmail = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSendEmailMutationOptions(options));
+    }
+
+export const getListPersonasUrl = () => {
+
+
+
+
+  return `/api/v1/personas`
+}
+
+/**
+ * @summary List all personas
+ */
+export const listPersonas = async ( options?: RequestInit): Promise<PersonaSummary[]> => {
+
+  return customFetch<PersonaSummary[]>(getListPersonasUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPersonasQueryKey = () => {
+    return [
+    `/api/v1/personas`
+    ] as const;
+    }
+
+
+export const getListPersonasQueryOptions = <TData = Awaited<ReturnType<typeof listPersonas>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPersonas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPersonasQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPersonas>>> = ({ signal }) => listPersonas({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPersonas>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPersonasQueryResult = NonNullable<Awaited<ReturnType<typeof listPersonas>>>
+export type ListPersonasQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all personas
+ */
+
+export function useListPersonas<TData = Awaited<ReturnType<typeof listPersonas>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPersonas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPersonasQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetPersonaUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/personas/${id}`
+}
+
+/**
+ * @summary Get persona details
+ */
+export const getPersona = async (id: string, options?: RequestInit): Promise<PersonaSummary> => {
+
+  return customFetch<PersonaSummary>(getGetPersonaUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPersonaQueryKey = (id: string,) => {
+    return [
+    `/api/v1/personas/${id}`
+    ] as const;
+    }
+
+
+export const getGetPersonaQueryOptions = <TData = Awaited<ReturnType<typeof getPersona>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPersona>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPersonaQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPersona>>> = ({ signal }) => getPersona(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPersona>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPersonaQueryResult = NonNullable<Awaited<ReturnType<typeof getPersona>>>
+export type GetPersonaQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get persona details
+ */
+
+export function useGetPersona<TData = Awaited<ReturnType<typeof getPersona>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPersona>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPersonaQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getActivatePersonaUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/personas/${id}/activate`
+}
+
+/**
+ * @summary Activate a persona (set as active)
+ */
+export const activatePersona = async (id: string, options?: RequestInit): Promise<PersonaSummary> => {
+
+  return customFetch<PersonaSummary>(getActivatePersonaUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getActivatePersonaMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activatePersona>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activatePersona>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['activatePersona'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activatePersona>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  activatePersona(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivatePersonaMutationResult = NonNullable<Awaited<ReturnType<typeof activatePersona>>>
+
+    export type ActivatePersonaMutationError = ErrorType<void>
+
+    /**
+ * @summary Activate a persona (set as active)
+ */
+export const useActivatePersona = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activatePersona>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof activatePersona>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getActivatePersonaMutationOptions(options));
     }
 
 export const getListMessageLogsUrl = (params?: ListMessageLogsParams,) => {

@@ -28,12 +28,6 @@ export const CallStatus = {
   FAILED: 'FAILED',
 } as const;
 
-export interface LanguageSwitchEvent {
-  from: string;
-  to: string;
-  at: string;
-}
-
 export interface Call {
   id: string;
   botId: string;
@@ -65,14 +59,6 @@ export interface Call {
   transferTarget?: string | null;
   followUpSent?: boolean;
   createdAt: string;
-  // ── Call-Connect Intelligence ─────────────────────────────────────────
-  /** HUMAN | ANSWERING_MACHINE | IVR | SILENCE | NO_RESPONSE */
-  connectOutcome?: string | null;
-  interruptionCount?: number;
-  escalationCount?: number;
-  languageSwitches?: LanguageSwitchEvent[] | null;
-  /** Final disposition written by call-connect state machine */
-  finalDisposition?: string | null;
 }
 
 export interface CallList {
@@ -153,6 +139,16 @@ export const BotStatus = {
   ERROR: 'ERROR',
 } as const;
 
+export type BotDirection = typeof BotDirection[keyof typeof BotDirection];
+
+
+export const BotDirection = {
+  inbound: 'inbound',
+  outbound: 'outbound',
+} as const;
+
+export type BotDirectionConfig = { [key: string]: unknown } | null;
+
 export interface Bot {
   id: string;
   displayName: string;
@@ -164,19 +160,27 @@ export interface Bot {
   /** @nullable */
   whatsappNumber?: string | null;
   status: BotStatus;
-  activeCalls?: number;
+  activeCalls: number;
+  direction: BotDirection;
+  directionConfig?: BotDirectionConfig;
+  supportedLanguages: string[];
+  defaultGreetingLanguage: string;
+  timezone: string;
+  endpointSilenceMs: number;
+  backchannelThresholdMs: number;
+  silenceRecoverySecs: number;
   createdAt: string;
-  // ── Call Direction System ─────────────────────────────────────────────
-  direction?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  directionConfig?: Record<string, any> | null;
-  supportedLanguages?: string[];
-  defaultGreetingLanguage?: string;
-  timezone?: string;
-  endpointSilenceMs?: number;
-  backchannelThresholdMs?: number;
-  silenceRecoverySecs?: number;
 }
+
+export type BotInputDirection = typeof BotInputDirection[keyof typeof BotInputDirection];
+
+
+export const BotInputDirection = {
+  inbound: 'inbound',
+  outbound: 'outbound',
+} as const;
+
+export type BotInputDirectionConfig = { [key: string]: unknown };
 
 export interface BotInput {
   displayName: string;
@@ -187,9 +191,8 @@ export interface BotInput {
   sipDomain?: string | null;
   /** @nullable */
   whatsappNumber?: string | null;
-  direction?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  directionConfig?: Record<string, any> | null;
+  direction?: BotInputDirection;
+  directionConfig?: BotInputDirectionConfig;
   supportedLanguages?: string[];
   defaultGreetingLanguage?: string;
   timezone?: string;
@@ -208,6 +211,16 @@ export const BotUpdateStatus = {
   ERROR: 'ERROR',
 } as const;
 
+export type BotUpdateDirection = typeof BotUpdateDirection[keyof typeof BotUpdateDirection];
+
+
+export const BotUpdateDirection = {
+  inbound: 'inbound',
+  outbound: 'outbound',
+} as const;
+
+export type BotUpdateDirectionConfig = { [key: string]: unknown };
+
 export interface BotUpdate {
   displayName?: string;
   /** @nullable */
@@ -218,9 +231,8 @@ export interface BotUpdate {
   /** @nullable */
   whatsappNumber?: string | null;
   status?: BotUpdateStatus;
-  direction?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  directionConfig?: Record<string, any> | null;
+  direction?: BotUpdateDirection;
+  directionConfig?: BotUpdateDirectionConfig;
   supportedLanguages?: string[];
   defaultGreetingLanguage?: string;
   timezone?: string;
@@ -520,6 +532,23 @@ export interface MessageResult {
   messageId: string;
   channel?: string;
   deliveryStatus?: string;
+}
+
+export interface PersonaSummary {
+  id: string;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  source: string;
+  isActive: boolean;
+  version: number;
+  hasTraits?: boolean;
+  /** @nullable */
+  traitsVersion?: number | null;
+  /** @nullable */
+  generatedByModel?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type MessageLogChannel = typeof MessageLogChannel[keyof typeof MessageLogChannel];

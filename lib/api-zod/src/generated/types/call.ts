@@ -5,26 +5,22 @@
  * VoxAgent AI Voice Bot Platform API
  * OpenAPI spec version: 1.0.0
  */
-
-export interface LanguageSwitchEvent {
-  from: string;
-  to: string;
-  at: string; // ISO timestamp
-}
+import type { CallDirection } from './callDirection';
+import type { CallStatus } from './callStatus';
 
 export interface Call {
   id: string;
   botId: string;
-  direction: string;
-  status: string;
+  direction: CallDirection;
+  status: CallStatus;
   /** @nullable */
   customerNumber?: string | null;
   /** @nullable */
   customerName?: string | null;
   /** @nullable */
-  startedAt?: string | null;
+  startedAt?: Date | null;
   /** @nullable */
-  endedAt?: string | null;
+  endedAt?: Date | null;
   /** @nullable */
   durationSeconds?: number | null;
   /** @nullable */
@@ -41,16 +37,6 @@ export interface Call {
   summary?: string | null;
   /** @nullable */
   transferTarget?: string | null;
-  followUpSent: boolean;
-  createdAt: string;
-
-  // ── Call-Connect Intelligence ─────────────────────────────────────────
-  /** HUMAN | ANSWERING_MACHINE | IVR | SILENCE | NO_RESPONSE */
-  connectOutcome?: string | null;
-  interruptionCount?: number;
-  escalationCount?: number;
-  /** Language-switch events during the call */
-  languageSwitches?: LanguageSwitchEvent[] | null;
-  /** Final disposition written by call-connect state machine */
-  finalDisposition?: string | null;
+  followUpSent?: boolean;
+  createdAt: Date;
 }

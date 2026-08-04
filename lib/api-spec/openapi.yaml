@@ -587,6 +587,61 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResult"
 
+  # ─── Personas ────────────────────────────────────────────────────
+  /v1/personas:
+    get:
+      operationId: listPersonas
+      summary: List all personas
+      responses:
+        "200":
+          description: List of personas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PersonaSummary"
+
+  /v1/personas/{id}:
+    get:
+      operationId: getPersona
+      summary: Get persona details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Persona details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonaSummary"
+        "404":
+          description: Not found
+
+  /v1/personas/{id}/activate:
+    post:
+      operationId: activatePersona
+      summary: Activate a persona (set as active)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Persona activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonaSummary"
+        "404":
+          description: Not found
+
   /v1/messaging/logs:
     get:
       operationId: listMessageLogs
@@ -775,7 +830,7 @@ components:
     # ─── Bot schemas ──────────────────────────────────────────────
     Bot:
       type: object
-      required: [id, displayName, sipExtension, status, createdAt]
+      required: [id, displayName, sipExtension, status, direction, supportedLanguages, defaultGreetingLanguage, timezone, endpointSilenceMs, backchannelThresholdMs, silenceRecoverySecs, activeCalls, createdAt]
       properties:
         id:
           type: string
@@ -795,6 +850,34 @@ components:
         activeCalls:
           type: integer
           default: 0
+        direction:
+          type: string
+          enum: [inbound, outbound]
+          default: inbound
+        directionConfig:
+          nullable: true
+          type: object
+          additionalProperties: true
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+          default: ["en"]
+        defaultGreetingLanguage:
+          type: string
+          default: "en"
+        timezone:
+          type: string
+          default: "UTC"
+        endpointSilenceMs:
+          type: integer
+          default: 1200
+        backchannelThresholdMs:
+          type: integer
+          default: 700
+        silenceRecoverySecs:
+          type: integer
+          default: 6
         createdAt:
           type: string
           format: date-time
@@ -813,6 +896,26 @@ components:
           type: ["string", "null"]
         whatsappNumber:
           type: ["string", "null"]
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        directionConfig:
+          type: object
+          additionalProperties: true
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+        defaultGreetingLanguage:
+          type: string
+        timezone:
+          type: string
+        endpointSilenceMs:
+          type: integer
+        backchannelThresholdMs:
+          type: integer
+        silenceRecoverySecs:
+          type: integer
 
     BotUpdate:
       type: object
@@ -830,6 +933,26 @@ components:
         status:
           type: string
           enum: [ONLINE, OFFLINE, BUSY, ERROR]
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        directionConfig:
+          type: object
+          additionalProperties: true
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+        defaultGreetingLanguage:
+          type: string
+        timezone:
+          type: string
+        endpointSilenceMs:
+          type: integer
+        backchannelThresholdMs:
+          type: integer
+        silenceRecoverySecs:
+          type: integer
 
     # ─── Config schemas ───────────────────────────────────────────
     PersonaConfig:
@@ -1214,6 +1337,36 @@ components:
           type: string
         deliveryStatus:
           type: string
+
+    # ─── Persona schemas ─────────────────────────────────────────
+    PersonaSummary:
+      type: object
+      required: [id, name, source, isActive, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        source:
+          type: string
+        isActive:
+          type: boolean
+        version:
+          type: integer
+        hasTraits:
+          type: boolean
+        traitsVersion:
+          type: ["integer", "null"]
+        generatedByModel:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     MessageLog:
       type: object

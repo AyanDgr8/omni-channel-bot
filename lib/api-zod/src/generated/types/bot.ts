@@ -5,8 +5,9 @@
  * VoxAgent AI Voice Bot Platform API
  * OpenAPI spec version: 1.0.0
  */
+import type { BotDirection } from './botDirection';
+import type { BotDirectionConfig } from './botDirectionConfig';
 import type { BotStatus } from './botStatus';
-import type { InboundDirectionConfig, OutboundDirectionConfig } from './directionConfig';
 
 export interface Bot {
   id: string;
@@ -19,22 +20,14 @@ export interface Bot {
   /** @nullable */
   whatsappNumber?: string | null;
   status: BotStatus;
-  activeCalls?: number;
+  activeCalls: number;
+  direction: BotDirection;
+  directionConfig?: BotDirectionConfig;
+  supportedLanguages: string[];
+  defaultGreetingLanguage: string;
+  timezone: string;
+  endpointSilenceMs: number;
+  backchannelThresholdMs: number;
+  silenceRecoverySecs: number;
   createdAt: Date;
-
-  // ── Call Direction System ─────────────────────────────────────────────
-  /** "inbound" | "outbound" */
-  direction?: string;
-  /** @nullable */
-  directionConfig?: InboundDirectionConfig | OutboundDirectionConfig | null;
-  /** ISO 639-1 codes */
-  supportedLanguages?: string[];
-  defaultGreetingLanguage?: string;
-  /** IANA timezone */
-  timezone?: string;
-
-  // ── Conversation tunables ─────────────────────────────────────────────
-  endpointSilenceMs?: number;
-  backchannelThresholdMs?: number;
-  silenceRecoverySecs?: number;
 }

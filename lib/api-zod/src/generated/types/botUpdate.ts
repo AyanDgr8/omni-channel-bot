@@ -5,6 +5,8 @@
  * VoxAgent AI Voice Bot Platform API
  * OpenAPI spec version: 1.0.0
  */
+import type { BotUpdateDirection } from './botUpdateDirection';
+import type { BotUpdateDirectionConfig } from './botUpdateDirectionConfig';
 import type { BotUpdateStatus } from './botUpdateStatus';
 
 export interface BotUpdate {
@@ -17,4 +19,12 @@ export interface BotUpdate {
   /** @nullable */
   whatsappNumber?: string | null;
   status?: BotUpdateStatus;
+  direction?: BotUpdateDirection;
+  directionConfig?: BotUpdateDirectionConfig;
+  supportedLanguages?: string[];
+  defaultGreetingLanguage?: string;
+  timezone?: string;
+  endpointSilenceMs?: number;
+  backchannelThresholdMs?: number;
+  silenceRecoverySecs?: number;
 }

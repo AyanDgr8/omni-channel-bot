@@ -7,10 +7,15 @@
  */
 
 export * from './bot';
-export * from './directionConfig';
+export * from './botDirection';
+export * from './botDirectionConfig';
 export * from './botInput';
+export * from './botInputDirection';
+export * from './botInputDirectionConfig';
 export * from './botStatus';
 export * from './botUpdate';
+export * from './botUpdateDirection';
+export * from './botUpdateDirectionConfig';
 export * from './botUpdateStatus';
 export * from './calendarInvite';
 export * from './calendarInviteInput';
@@ -55,6 +60,7 @@ export * from './personaConfigInputCharacter';
 export * from './personaConfigInputGreetingStyle';
 export * from './personaConfigInputInterruptMode';
 export * from './personaConfigInterruptMode';
+export * from './personaSummary';
 export * from './statsOverview';
 export * from './telegramMessageInput';
 export * from './timeSlot';
