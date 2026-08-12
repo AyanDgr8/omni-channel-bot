@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import React from "react";
 import {
   useListCalls,
   useListBots,
+  useListPersonas,
   useDialCall,
   useHangupCall,
   getListCallsQueryKey,
@@ -226,6 +227,12 @@ export default function Calls() {
   const params = { limit, offset: page * limit, ...(dirFilter !== "all" ? { direction: dirFilter as "INBOUND" | "OUTBOUND" } : {}) };
   const { data, isLoading, refetch } = useListCalls(params, { query: { queryKey: getListCallsQueryKey(params) } });
   const { data: bots } = useListBots();
+  const { data: personas } = useListPersonas();
+  const personaMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of personas ?? []) map[p.id] = p.name;
+    return map;
+  }, [personas]);
   const dialMutation = useDialCall();
   const hangupMutation = useHangupCall();
 
@@ -351,12 +358,16 @@ export default function Calls() {
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground">{call.languageDetected?.toUpperCase() ?? "—"}</td>
                       <td className="px-3 py-2.5">
-                        {hasPersona ? (
-                          <span className="inline-flex items-center gap-1 text-primary" title={(call as any).personaId ?? undefined}>
-                            <Bot className="w-3 h-3 shrink-0" />
-                            <span className="text-[10px] font-medium truncate max-w-[90px]">{(call as any).personaName ?? "Active"}</span>
-                          </span>
-                        ) : (
+                        {hasPersona ? (() => {
+                          const pid = (call as any).personaId as string;
+                          const resolvedName = personaMap[pid] ?? (call as any).personaName ?? pid;
+                          return (
+                            <span className="inline-flex items-center gap-1 text-primary" title={pid}>
+                              <Bot className="w-3 h-3 shrink-0" />
+                              <span className="text-[10px] font-medium truncate max-w-[100px]">{resolvedName}</span>
+                            </span>
+                          );
+                        })() : (
                           <span className="text-muted-foreground text-[10px]">—</span>
                         )}
                       </td>
