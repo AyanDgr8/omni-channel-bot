@@ -7,10 +7,12 @@ import {
   getListBotsQueryKey,
 } from "@workspace/api-client-react";
 import type { Bot as BotType } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import BotEngineConfig from "@/components/BotEngineConfig";
+import type { EngineConfig } from "@/components/BotEngineConfig";
 import {
   Bot, Plus, Trash2, Edit, Wifi, WifiOff, Phone, AlertCircle,
-  PhoneIncoming, PhoneOutgoing, Settings2, Globe, Clock, Mic2,
+  PhoneIncoming, PhoneOutgoing, Settings2, Globe, Clock, Mic2, Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -121,11 +123,14 @@ function buildHandlingDefaults(bot: BotData | null) {
   };
 }
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export default function Bots() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [editBot, setEditBot] = useState<string | null>(null);
+  const [editBotData, setEditBotData] = useState<BotData | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
   const [form, setForm] = useState(emptyBasicForm);
   const [handling, setHandling] = useState(() => buildHandlingDefaults(null));
@@ -135,8 +140,36 @@ export default function Bots() {
   const updateMut = useUpdateBot();
   const deleteMut = useDeleteBot();
 
+  const engineMut = useMutation({
+    mutationFn: async ({ id, config }: { id: string; config: EngineConfig }) => {
+      const r = await fetch(`${BASE}/api/v1/bots/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          llmChainJson: config.llmChain.length > 0 ? config.llmChain : null,
+          sttMapJson: Object.keys(config.sttMap).length > 0 ? config.sttMap : null,
+          ttsMapJson: Object.keys(config.ttsMap).length > 0 ? config.ttsMap : null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error((err as Record<string, string>)?.error ?? `HTTP ${r.status}`);
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Engine config saved" });
+      qc.invalidateQueries({ queryKey: getListBotsQueryKey() });
+    },
+    onError: (err) => {
+      toast({ title: "Failed to save engine config", description: String(err.message), variant: "destructive" });
+    },
+  });
+
   function openCreate() {
     setEditBot(null);
+    setEditBotData(null);
     setForm(emptyBasicForm);
     setHandling(buildHandlingDefaults(null));
     setActiveTab("basic");
@@ -145,6 +178,7 @@ export default function Bots() {
 
   function openEdit(b: BotData) {
     setEditBot(b.id);
+    setEditBotData(b);
     setForm({
       displayName: b.displayName, email: b.email ?? "",
       sipExtension: b.sipExtension, sipDomain: b.sipDomain ?? "",
@@ -318,6 +352,11 @@ export default function Bots() {
               <TabsTrigger value="handling" className="text-xs flex-1 gap-1">
                 <Settings2 className="w-3 h-3" /> Call Handling
               </TabsTrigger>
+              {editBot && (
+                <TabsTrigger value="engine" className="text-xs flex-1 gap-1">
+                  <Cpu className="w-3 h-3" /> Engine
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* ── Basic Info ─────────────────────────────────────── */}
@@ -682,18 +721,32 @@ export default function Bots() {
                 </div>
               </section>
             </TabsContent>
+
+            {/* ── Engine Config ────────────────────────────────── */}
+            {editBot && (
+              <TabsContent value="engine" className="space-y-4 pt-3">
+                <BotEngineConfig
+                  botId={editBot}
+                  supportedLanguages={handling.supportedLanguages}
+                  saving={engineMut.isPending}
+                  onSave={(cfg) => engineMut.mutate({ id: editBot, config: cfg })}
+                />
+              </TabsContent>
+            )}
           </Tabs>
 
           <DialogFooter className="pt-2">
             <Button variant="outline" size="sm" onClick={() => setOpen(false)} className="text-xs">Cancel</Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={!form.displayName || !form.sipExtension || createMut.isPending || updateMut.isPending}
-              className="text-xs"
-            >
-              {editBot ? "Save Changes" : "Register"}
-            </Button>
+            {activeTab !== "engine" && (
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={!form.displayName || !form.sipExtension || createMut.isPending || updateMut.isPending}
+                className="text-xs"
+              >
+                {editBot ? "Save Changes" : "Register"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

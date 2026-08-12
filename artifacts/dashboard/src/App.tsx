@@ -14,6 +14,8 @@ import Messaging from "@/pages/messaging";
 import CalendarPage from "@/pages/calendar";
 import LoginPage from "@/pages/login";
 import UsersPage from "@/pages/users";
+import ProvidersPage from "@/pages/providers";
+import ModelCatalogPage from "@/pages/model-catalog";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
@@ -67,6 +69,8 @@ function Router() {
               <Route path="/messaging" component={Messaging} />
               <Route path="/calendar" component={CalendarPage} />
               <Route path="/users" component={UsersPage} />
+              <Route path="/providers" component={ProvidersPage} />
+              <Route path="/model-catalog" component={ModelCatalogPage} />
               <Route component={NotFound} />
             </Switch>
           </Layout>

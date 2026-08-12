@@ -16,6 +16,8 @@ import {
   LogOut,
   Loader2,
   Building2,
+  Key,
+  BookOpen,
 } from "lucide-react";
 import {
   Tooltip,
@@ -92,6 +94,40 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {/* Providers link — visible to ADMIN+ */}
+          {(user?.role === "ADMIN" || user?.role === "OWNER") && (
+            <Link href="/providers">
+              <div
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2 mx-2 rounded text-sm cursor-pointer transition-colors",
+                  location.startsWith("/providers")
+                    ? "bg-primary/15 text-primary font-medium"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <Key className="w-4 h-4 flex-shrink-0" />
+                Providers
+              </div>
+            </Link>
+          )}
+
+          {/* Model Catalog link — visible to ADMIN+ */}
+          {(user?.role === "ADMIN" || user?.role === "OWNER") && (
+            <Link href="/model-catalog">
+              <div
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2 mx-2 rounded text-sm cursor-pointer transition-colors",
+                  location.startsWith("/model-catalog")
+                    ? "bg-primary/15 text-primary font-medium"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <BookOpen className="w-4 h-4 flex-shrink-0" />
+                Model Catalog
+              </div>
+            </Link>
+          )}
 
           {/* Users link — visible only to OWNER */}
           {user?.role === "OWNER" && (
