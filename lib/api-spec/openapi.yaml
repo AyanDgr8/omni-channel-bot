@@ -78,6 +78,26 @@ paths:
         "400":
           description: Bad request
 
+  /v1/calls/inbound:
+    post:
+      operationId: receiveInboundCall
+      summary: Webhook — incoming call arrives; stamps active persona at call-start
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InboundCallInput"
+      responses:
+        "201":
+          description: Inbound call record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+        "400":
+          description: Bad request
+
   /v1/calls/{id}:
     get:
       operationId: getCall
@@ -719,6 +739,12 @@ components:
           type: ["string", "null"]
         followUpSent:
           type: boolean
+        personaId:
+          type: ["string", "null"]
+          description: ID of the persona that was active when this call started
+        composedPrompt:
+          type: ["string", "null"]
+          description: Fully-composed system prompt injected for this call
         createdAt:
           type: string
           format: date-time
@@ -752,6 +778,19 @@ components:
         maxAttempts:
           type: integer
           default: 3
+
+    InboundCallInput:
+      type: object
+      required: [from, botId]
+      properties:
+        from:
+          type: string
+          description: Caller's E.164 phone number
+        botId:
+          type: string
+        to:
+          type: ["string", "null"]
+          description: Dialed number (DID) that received the call
 
     TransferInput:
       type: object

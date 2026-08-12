@@ -243,7 +243,14 @@ export const ConferenceCallResponse = zod.object({
   "createdAt": zod.coerce.date()
 })
 
-
+/**
+ * @summary Webhook — incoming call arrives; stamps active persona at call-start
+ */
+export const ReceiveInboundCallBody = zod.object({
+  "from": zod.string().describe("Caller's E.164 phone number"),
+  "botId": zod.string(),
+  "to": zod.string().nullish().describe("Dialed number (DID) that received the call")
+})
 /**
  * @summary Dashboard overview statistics
  */
@@ -882,3 +889,25 @@ export const ListMessageLogsResponseItem = zod.object({
 export const ListMessageLogsResponse = zod.array(ListMessageLogsResponseItem)
 
 
+export const ReceiveInboundCallResponse = zod.object({
+  "id": zod.string(),
+  "botId": zod.string(),
+  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
+  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
+  "customerNumber": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "hangupReason": zod.string().nullish(),
+  "sipCode": zod.number().nullish(),
+  "amdResult": zod.string().nullish(),
+  "languageDetected": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "transferTarget": zod.string().nullish(),
+  "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
