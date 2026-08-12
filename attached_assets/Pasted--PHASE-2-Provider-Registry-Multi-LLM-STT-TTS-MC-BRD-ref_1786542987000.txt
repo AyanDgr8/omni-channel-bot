@@ -1,0 +1,39 @@
+## PHASE 2 — Provider Registry: Multi-LLM / STT / TTS
+**MC-BRD refs:** FR-TECH-01–09, FR-CORE-04/05 · **Builds on VoxAgent's llm_config + circuit breaker**
+
+```
+TASK: Replace the single llm_config model string with a full provider
+registry covering LLM, STT, and TTS, per MC-BRD Section 7.10.1-7.10.4.
+
+1. Table `providers` (tenant_id, kind: LLM|STT|TTS, vendor, display_name,
+   base_url, auth_mode, api_key_encrypted, config_json, enabled). Vendors to
+   seed as selectable catalogue entries (no keys): LLM - openai, anthropic,
+   google-gemini, sarvam, openai-compatible (custom base_url); STT -
+   deepgram, elevenlabs, google, sarvam, whisper-compatible; TTS -
+   elevenlabs, google, deepgram-aura, cartesia, sarvam, azure.
+2. Table `model_catalog` (provider_vendor, kind, model_id, display_name,
+   tier, context_window, cost_per_unit, deprecated). Seed current models for
+   each vendor. Admin CRUD so new models are added as DATA, never code
+   (FR-TECH-01).
+3. Per-agent (bot) engine config: extend bots with `llm_chain_json` (ordered
+   [{provider_id, model_id, params}] fallback chain), `stt_map_json` and
+   `tts_map_json` (per-language provider/model/voice maps, e.g. "hi" ->
+   sarvam, "en" -> deepgram) per FR-TECH-02/05/06.
+4. Refactor the existing LLM call path: keep the circuit breaker (CF-05)
+   but make it PER PROVIDER instance, and walk the bot's fallback chain on
+   failure/timeout/breaker-open. Log per-call provider telemetry (provider,
+   model, latency_ms, tokens, outcome) to a new `provider_call_log` table.
+5. BYO-keys: tenant admins enter their own keys per provider (encrypted at
+   rest with the existing secret handling); platform-pooled keys supported
+   via a NULL-tenant provider row (FR-TECH-09). Extend the existing API-Keys
+   tab UI: provider list per kind, masked keys, test-connectivity button per
+   provider (reuse CF-09 pattern).
+6. [MEDIA-PLANE INTERFACE] Add GET /v1/engine/session-config/:callId -
+   returns the resolved STT/LLM/TTS provider+model+voice settings for a call
+   (by bot + detected language), for the MCSSE media layer to consume at
+   call setup. Document the JSON contract in an OpenAPI block.
+
+ACCEPTANCE: an agent configured Sarvam->Gemini->Claude chain demonstrably
+fails over in a test with a mocked Sarvam 500; per-language STT map resolves
+correctly in session-config; adding a new model via admin UI requires zero
+code changes.
