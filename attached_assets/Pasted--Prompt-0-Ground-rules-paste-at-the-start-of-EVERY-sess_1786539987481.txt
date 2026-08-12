@@ -1,0 +1,77 @@
+## Prompt 0 — Ground rules (paste at the start of EVERY session)
+
+```
+You are working on VoxAgent, a running production codebase: a monorepo with an
+Express 5 API server (artifacts/api-server), a React/Vite dashboard
+(artifacts/dashboard), an Expo React Native mobile app (artifacts/mobile), and
+shared packages @workspace/db (Drizzle ORM + PostgreSQL), @workspace/api-zod,
+and @workspace/api-client-react.
+
+Non-negotiable rules for this session:
+1. READ FIRST: before writing any code, read the existing schema in
+   @workspace/db, the route files in artifacts/api-server/src/routes, and the
+   services (PersonaComposer, PersonaService, CallConnectService). Summarise
+   what you found and your plan. WAIT for my approval before editing.
+2. DO NOT rewrite or restructure working code unless the task explicitly
+   requires it. Extend, don't replace. Never delete a table or column - use
+   additive migrations.
+3. Every schema change is a numbered Drizzle migration file. Never edit an
+   applied migration.
+4. Every new endpoint gets: a Zod schema in @workspace/api-zod, a typed hook
+   in @workspace/api-client-react, and structured Pino logging.
+5. Preserve these existing behaviours exactly: persona composed-prompt
+   snapshotting on call records (PE-19), persona activation validation with
+   HTTP 422 (PE-03), and the LLM circuit breaker (CF-05).
+6. Write at least one integration test per new endpoint (supertest) and run
+   the full test suite before declaring the task done.
+7. If a task is ambiguous, ask me ONE clarifying question, then proceed.
+Work only on the task I give you next. Do not "improve" unrelated code.
+```
+
+---
+
+## PHASE 1 — Multi-Tenancy & RBAC Foundation
+**MC-BRD refs:** FR-ADM-04, NFR-05/09 · **Removes VoxAgent constraints C1, C3**
+**Why first:** every later table (campaigns, DNC lists, connectors) needs `tenant_id`. Doing this last means re-migrating everything.
+
+```
+TASK: Convert VoxAgent from single-tenant to multi-tenant with RBAC.
+
+1. Create tables: `tenants` (id, name, slug, status, region, created_at) and
+   `users` (id, tenant_id FK, email, password_hash, role, status). Roles:
+   OWNER, ADMIN, SUPERVISOR, ANALYST.
+2. Additive migration: add `tenant_id` (FK -> tenants.id, indexed) to EVERY
+   existing domain table: calls, bots, personas, persona_traits,
+   persona_config, conversation_config, llm_config, flow_configs,
+   memory_entries, message_logs, calendar_invites, email_agent_config,
+   writing_style_profiles. Backfill all existing rows to a seeded tenant
+   'default' so the running system keeps working unchanged.
+3. Convert the three singleton config tables (persona_config,
+   conversation_config, llm_config) to one-row-per-tenant. Config lookups
+   become "by tenant_id" with the seeded default as fallback.
+4. Auth: session-based login (email+password, bcrypt) issuing a signed
+   session containing user_id, tenant_id, role. Add Express middleware
+   `tenantScope` that (a) rejects unauthenticated API requests except
+   /v1/health and telephony webhooks, and (b) automatically filters every
+   Drizzle query by session tenant_id. Telephony webhooks
+   (/v1/calls/receive) authenticate by a per-tenant webhook secret header
+   and resolve tenant from the called DID (add table `tenant_dids`:
+   tenant_id, did_e164 unique).
+5. RBAC middleware `requireRole(minRole)`: ANALYST=read-only, SUPERVISOR=
+   +call ops (transfer/conference), ADMIN=+config/persona/bot CRUD,
+   OWNER=+user management & billing.
+6. REMOVE the single-active-persona constraint (PE-02): personas are now
+   activated PER BOT, not system-wide. Add `bots.active_persona_id` FK.
+   Keep the activation validation gate (PE-03/PE-18) exactly as-is, applied
+   at per-bot activation. Update dashboard persona UI: "Activate" becomes
+   "Assign to bot ->" with a bot picker.
+7. Audit log: table `audit_log` (tenant_id, actor_user_id, action, entity,
+   entity_id, before_json, after_json, ip, created_at). Write an entry from
+   middleware for every mutating request on personas, bots, configs, users.
+8. Dashboard: login page, tenant name in the header, user management screen
+   (OWNER only), and role-hidden UI controls.
+
+ACCEPTANCE: two seeded tenants A and B with one user each; user A can never
+read or mutate any B row via any endpoint (prove with tests); existing
+default-tenant data still fully functional; audit_log rows written on
+persona edit.
