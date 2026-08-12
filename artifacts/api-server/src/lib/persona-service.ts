@@ -1,12 +1,13 @@
 /**
- * Trait resolution service: DB-first lookup, LLM fallback, Zod validation.
+ * Trait resolution service: DB-first lookup, LLM fallback (via ProviderRegistry), Zod validation.
  * NEVER called at call-time — traits are always cached in DB before use.
  */
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
-import { db, personasTable, personaTraitsTable, llmConfigTable } from "@workspace/db";
+import { db, personasTable, personaTraitsTable } from "@workspace/db";
 import type { PersonaTraitsJson } from "@workspace/db";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
+import { providerRegistry } from "./provider-registry.js";
 
 // ─── Zod schema for trait validation ─────────────────────────────────────────
 
@@ -47,92 +48,7 @@ export const TraitsSchema = z.object({
   }),
 });
 
-// ─── LLM caller ──────────────────────────────────────────────────────────────
-
-async function callLLM(
-  systemPrompt: string,
-  userPrompt: string,
-  engine: string,
-  timeoutMs = 30_000
-): Promise<{ text: string; model: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    if (engine === "openai" || engine === "ollama") {
-      const baseUrl =
-        engine === "ollama"
-          ? (process.env.OLLAMA_BASE_URL ?? "http://localhost:11434") + "/v1"
-          : "https://api.openai.com/v1";
-      const apiKey = engine === "ollama" ? "ollama" : (process.env.OPENAI_API_KEY ?? "");
-      const model = engine === "ollama" ? (process.env.OLLAMA_MODEL ?? "llama3") : "gpt-4o-mini";
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 2000,
-        }),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as any;
-      return { text: data.choices[0].message.content, model };
-    }
-
-    if (engine === "gemini") {
-      const apiKey = process.env.GEMINI_API_KEY ?? "";
-      const model = "gemini-1.5-flash";
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 2000 },
-          }),
-          signal: controller.signal,
-        }
-      );
-      if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as any;
-      return { text: data.candidates[0].content.parts[0].text, model };
-    }
-
-    if (engine === "anthropic") {
-      const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
-      const model = "claude-3-haiku-20240307";
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 2000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`Anthropic error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as any;
-      return { text: data.content[0].text, model };
-    }
-
-    throw new Error(`Unknown engine: ${engine}`);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// ─── Prompt builders ─────────────────────────────────────────────────────────
 
 function buildPersonaPrompt(name: string, description?: string | null) {
   const SYSTEM = `You are an expert voice-bot persona designer. 
@@ -155,7 +71,6 @@ Generate the complete trait profile now. Return only JSON.`;
 }
 
 function extractJson(raw: string): string {
-  // Strip markdown fences if the model ignored instructions
   const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (match) return match[1].trim();
   const first = raw.indexOf("{");
@@ -166,9 +81,16 @@ function extractJson(raw: string): string {
 
 // ─── Core resolution function ─────────────────────────────────────────────────
 
+/**
+ * Resolve traits for a persona, using DB cache first.
+ * Falls back to the ProviderRegistry (which walks the LLM chain with circuit breakers).
+ *
+ * @param tenantId  - Required for provider chain resolution
+ */
 export async function resolvePersonaTraits(
   personaId: string,
   name: string,
+  tenantId: string,
   description?: string | null,
   forceRegenerate = false
 ): Promise<{ traits: PersonaTraitsJson; model: string | null; fromCache: boolean }> {
@@ -185,63 +107,48 @@ export async function resolvePersonaTraits(
     }
   }
 
-  // 2. LLM generation
-  const [llmCfg] = await db.select().from(llmConfigTable).where(eq(llmConfigTable.id, "default"));
-  const engines = llmCfg
-    ? [llmCfg.primary, ...llmCfg.fallbackChain]
-    : ["openai", "anthropic", "gemini"];
-
+  // 2. Generate via provider registry (chain-aware, circuit-breaker-protected)
   const { SYSTEM, USER } = buildPersonaPrompt(name, description);
-  let lastError: unknown;
 
-  for (const engine of engines) {
-    try {
-      const { text, model } = await callLLM(SYSTEM, USER, engine, 30_000);
-      const jsonStr = extractJson(text);
-      const parsed = TraitsSchema.parse(JSON.parse(jsonStr));
-      return { traits: parsed as PersonaTraitsJson, model, fromCache: false };
-    } catch (err) {
-      logger.warn({ err, engine }, "Persona trait generation failed for engine, trying next");
-      lastError = err;
-    }
-  }
+  const result = await providerRegistry.callLlm({
+    systemPrompt: SYSTEM,
+    userPrompt: USER,
+    tenantId,
+    timeoutMs: 30_000,
+  });
 
-  throw new Error(
-    `All LLM engines failed to generate traits. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`
-  );
+  const jsonStr = extractJson(result.text);
+  const parsed = TraitsSchema.parse(JSON.parse(jsonStr));
+
+  return { traits: parsed as PersonaTraitsJson, model: result.modelId, fromCache: false };
 }
 
 // ─── Refine traits with AI instruction ───────────────────────────────────────
 
+/**
+ * Refine an existing trait profile via instruction.
+ *
+ * @param tenantId  - Required for provider chain resolution
+ */
 export async function refinePersonaTraits(
   currentTraits: PersonaTraitsJson,
-  instruction: string
+  instruction: string,
+  tenantId: string
 ): Promise<{ traits: PersonaTraitsJson; model: string }> {
-  const [llmCfg] = await db.select().from(llmConfigTable).where(eq(llmConfigTable.id, "default"));
-  const engines = llmCfg
-    ? [llmCfg.primary, ...llmCfg.fallbackChain]
-    : ["openai", "anthropic", "gemini"];
-
   const SYSTEM = `You are an expert voice-bot persona designer. 
 You will receive a current JSON trait profile and an instruction for how to modify it.
 Apply the instruction and return ONLY the updated JSON. No markdown, no explanation.
 Preserve all fields — only change what the instruction asks.`;
   const USER = `Current traits:\n${JSON.stringify(currentTraits, null, 2)}\n\nInstruction: ${instruction}\n\nReturn only the updated JSON.`;
 
-  let lastError: unknown;
-  for (const engine of engines) {
-    try {
-      const { text, model } = await callLLM(SYSTEM, USER, engine, 30_000);
-      const jsonStr = extractJson(text);
-      const parsed = TraitsSchema.parse(JSON.parse(jsonStr));
-      return { traits: parsed as PersonaTraitsJson, model };
-    } catch (err) {
-      logger.warn({ err, engine }, "Persona refine failed for engine, trying next");
-      lastError = err;
-    }
-  }
+  const result = await providerRegistry.callLlm({
+    systemPrompt: SYSTEM,
+    userPrompt: USER,
+    tenantId,
+    timeoutMs: 30_000,
+  });
 
-  throw new Error(
-    `All LLM engines failed to refine traits. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`
-  );
+  const jsonStr = extractJson(result.text);
+  const parsed = TraitsSchema.parse(JSON.parse(jsonStr));
+  return { traits: parsed as PersonaTraitsJson, model: result.modelId };
 }

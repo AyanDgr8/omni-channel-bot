@@ -13,6 +13,9 @@ import apiKeysRouter from "./api-keys";
 import flowRouter from "./flow";
 import emailAgentRouter from "./email-agent";
 import personasRouter from "./personas";
+import providersRouter from "./providers";
+import modelCatalogRouter from "./model-catalog";
+import engineRouter from "./engine";
 
 const router: IRouter = Router();
 
@@ -30,5 +33,8 @@ router.use(apiKeysRouter);
 router.use(flowRouter);
 router.use(emailAgentRouter);
 router.use(personasRouter);
+router.use(providersRouter);
+router.use(modelCatalogRouter);
+router.use(engineRouter);
 
 export default router;

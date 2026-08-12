@@ -317,7 +317,8 @@ describe("Unauthenticated access", () => {
 
   for (const [method, path] of PROTECTED_ROUTES) {
     it(`${method} ${path} → 401 without session`, async () => {
-      const res = await request(app)[method.toLowerCase()](path);
+      const lower = method.toLowerCase() as "get" | "post" | "put" | "patch" | "delete";
+      const res = await request(app)[lower](path);
       expect(res.status).toBe(401);
     });
   }

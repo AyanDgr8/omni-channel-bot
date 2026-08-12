@@ -41,6 +41,27 @@ export const botsTable = pgTable("bots", {
    */
   activePersonaId: text("active_persona_id"),
 
+  // ── Provider Registry — per-bot engine config (FR-TECH-02/05/06) ──────────
+
+  /**
+   * Ordered LLM fallback chain: [{provider_id, model_id, params?}]
+   * params: { temperature?: number, max_tokens?: number }
+   * NULL = use tenant-level provider list.
+   */
+  llmChainJson: jsonb("llm_chain_json"),
+
+  /**
+   * Per-language STT map: { "en": { provider_id, model_id }, "hi": { ... } }
+   * NULL = use first enabled tenant STT provider for all languages.
+   */
+  sttMapJson: jsonb("stt_map_json"),
+
+  /**
+   * Per-language TTS map: { "en": { provider_id, model_id, voice? }, ... }
+   * NULL = use first enabled tenant TTS provider for all languages.
+   */
+  ttsMapJson: jsonb("tts_map_json"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

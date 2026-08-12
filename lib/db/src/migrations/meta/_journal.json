@@ -29,6 +29,13 @@
       "when": 1786540958801,
       "tag": "0003_bot_persona",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786640000000,
+      "tag": "0004_provider_registry",
+      "breakpoints": true
     }
   ]
 }

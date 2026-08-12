@@ -372,7 +372,10 @@ export const CreateBotBody = zod.object({
   "timezone": zod.string().optional(),
   "endpointSilenceMs": zod.number().optional(),
   "backchannelThresholdMs": zod.number().optional(),
-  "silenceRecoverySecs": zod.number().optional()
+  "silenceRecoverySecs": zod.number().optional(),
+  "llmChainJson": zod.unknown().nullish(),
+  "sttMapJson": zod.unknown().nullish(),
+  "ttsMapJson": zod.unknown().nullish()
 })
 
 
@@ -409,7 +412,11 @@ export const GetBotResponse = zod.object({
   "endpointSilenceMs": zod.number().default(getBotResponseEndpointSilenceMsDefault),
   "backchannelThresholdMs": zod.number().default(getBotResponseBackchannelThresholdMsDefault),
   "silenceRecoverySecs": zod.number().default(getBotResponseSilenceRecoverySecsDefault),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "llmChainJson": zod.unknown().nullish(),
+  "sttMapJson": zod.unknown().nullish(),
+  "ttsMapJson": zod.unknown().nullish(),
+  "activePersonaId": zod.string().nullish()
 })
 
 
@@ -434,7 +441,10 @@ export const UpdateBotBody = zod.object({
   "timezone": zod.string().optional(),
   "endpointSilenceMs": zod.number().optional(),
   "backchannelThresholdMs": zod.number().optional(),
-  "silenceRecoverySecs": zod.number().optional()
+  "silenceRecoverySecs": zod.number().optional(),
+  "llmChainJson": zod.unknown().nullish(),
+  "sttMapJson": zod.unknown().nullish(),
+  "ttsMapJson": zod.unknown().nullish()
 })
 
 export const updateBotResponseActiveCallsDefault = 0;

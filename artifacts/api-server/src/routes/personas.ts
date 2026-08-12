@@ -84,7 +84,7 @@ router.post("/v1/personas", requireRole("ADMIN"), auditMiddleware("persona"), as
     .returning();
 
   try {
-    const { traits, model } = await resolvePersonaTraits(persona.id, persona.name, persona.description, false);
+    const { traits, model } = await resolvePersonaTraits(persona.id, persona.name, req.tenantId!, persona.description, false);
     await db.insert(personaTraitsTable).values({
       personaId: persona.id,
       version: 1,
@@ -185,7 +185,7 @@ router.post("/v1/personas/:id/regenerate", requireRole("ADMIN"), async (req, res
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
 
   try {
-    const { traits, model } = await resolvePersonaTraits(persona.id, persona.name, persona.description, true);
+    const { traits, model } = await resolvePersonaTraits(persona.id, persona.name, req.tenantId!, persona.description, true);
     const newVersion = persona.version + 1;
     await db.insert(personaTraitsTable).values({
       personaId: persona.id,
@@ -223,7 +223,7 @@ router.post("/v1/personas/:id/refine", requireRole("ADMIN"), async (req, res) =>
   if (!traitsRow) { res.status(404).json({ error: "No traits found for this persona" }); return; }
 
   try {
-    const { traits: updatedTraits, model } = await refinePersonaTraits(traitsRow.traits, instruction);
+    const { traits: updatedTraits, model } = await refinePersonaTraits(traitsRow.traits, instruction, req.tenantId!);
     res.json({ before: traitsRow.traits, after: updatedTraits, model });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
