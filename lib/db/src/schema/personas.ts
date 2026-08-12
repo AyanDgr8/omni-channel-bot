@@ -10,6 +10,8 @@ export const personasTable = pgTable("personas", {
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  /** VoxAgent organisation this persona belongs to */
+  tenantId: text("tenant_id").notNull(),
 });
 
 export type Persona = typeof personasTable.$inferSelect;

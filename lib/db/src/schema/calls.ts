@@ -39,6 +39,9 @@ export const callsTable = pgTable("calls", {
   /** Fully-composed system prompt injected for this call */
   composedPrompt: text("composed_prompt"),
 
+  /** VoxAgent organisation this call belongs to */
+  tenantId: text("tenant_id").notNull(),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

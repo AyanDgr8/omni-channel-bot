@@ -44,6 +44,8 @@ export const personaTraitsTable = pgTable("persona_traits", {
   version: integer("version").notNull().default(1),
   traits: jsonb("traits").notNull().$type<PersonaTraitsJson>(),
   generatedByModel: text("generated_by_model"),
+  /** Denormalised from parent persona for fast tenant filtering */
+  tenantId: text("tenant_id").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

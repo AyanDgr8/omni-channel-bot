@@ -14,6 +14,8 @@ export const calendarInvitesTable = pgTable("calendar_invites", {
   meetLink: text("meet_link"),
   calendarEventId: text("calendar_event_id"),
   callId: text("call_id"),
+  /** VoxAgent organisation this invite belongs to */
+  tenantId: text("tenant_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

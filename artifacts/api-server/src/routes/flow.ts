@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, flowConfigsTable } from "@workspace/db";
 import { randomUUID } from "crypto";
+import { requireRole } from "../middleware/require-role.js";
+import { auditMiddleware } from "../middleware/audit.js";
 
 const router: IRouter = Router();
 
@@ -31,21 +33,19 @@ const DEFAULT_FLOW = {
   ],
 };
 
-router.get("/v1/flow/configs", async (_req, res): Promise<void> => {
-  const configs = await db.select().from(flowConfigsTable).orderBy(flowConfigsTable.updatedAt);
+router.get("/v1/flow/configs", async (req, res): Promise<void> => {
+  const configs = await db
+    .select()
+    .from(flowConfigsTable)
+    .where(eq(flowConfigsTable.tenantId, req.tenantId!))
+    .orderBy(flowConfigsTable.updatedAt);
   res.json(configs);
 });
 
-router.post("/v1/flow/configs", async (req, res): Promise<void> => {
-  const { name, description, definition } = req.body as {
-    name?: string;
-    description?: string;
-    definition?: unknown;
-  };
-  if (!name) {
-    res.status(400).json({ error: "name is required" });
-    return;
-  }
+router.post("/v1/flow/configs", requireRole("ADMIN"), auditMiddleware("flow"), async (req, res): Promise<void> => {
+  const { name, description, definition } = req.body as { name?: string; description?: string; definition?: unknown };
+  if (!name) { res.status(400).json({ error: "name is required" }); return; }
+
   const [config] = await db
     .insert(flowConfigsTable)
     .values({
@@ -53,29 +53,25 @@ router.post("/v1/flow/configs", async (req, res): Promise<void> => {
       name,
       description: description ?? null,
       definition: definition ?? DEFAULT_FLOW,
+      tenantId: req.tenantId!,
     })
     .returning();
   res.status(201).json(config);
 });
 
 router.get("/v1/flow/configs/:id", async (req, res): Promise<void> => {
+  const id = req.params.id as string;
   const [config] = await db
     .select()
     .from(flowConfigsTable)
-    .where(eq(flowConfigsTable.id, req.params.id));
-  if (!config) {
-    res.status(404).json({ error: "Flow not found" });
-    return;
-  }
+    .where(and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!)));
+  if (!config) { res.status(404).json({ error: "Flow not found" }); return; }
   res.json(config);
 });
 
-router.put("/v1/flow/configs/:id", async (req, res): Promise<void> => {
-  const { name, description, definition } = req.body as {
-    name?: string;
-    description?: string;
-    definition?: unknown;
-  };
+router.put("/v1/flow/configs/:id", requireRole("ADMIN"), auditMiddleware("flow"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+  const { name, description, definition } = req.body as { name?: string; description?: string; definition?: unknown };
   const [config] = await db
     .update(flowConfigsTable)
     .set({
@@ -84,24 +80,19 @@ router.put("/v1/flow/configs/:id", async (req, res): Promise<void> => {
       ...(definition ? { definition } : {}),
       updatedAt: new Date(),
     })
-    .where(eq(flowConfigsTable.id, req.params.id))
+    .where(and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!)))
     .returning();
-  if (!config) {
-    res.status(404).json({ error: "Flow not found" });
-    return;
-  }
+  if (!config) { res.status(404).json({ error: "Flow not found" }); return; }
   res.json(config);
 });
 
-router.delete("/v1/flow/configs/:id", async (req, res): Promise<void> => {
+router.delete("/v1/flow/configs/:id", requireRole("ADMIN"), auditMiddleware("flow"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
   const [config] = await db
     .delete(flowConfigsTable)
-    .where(eq(flowConfigsTable.id, req.params.id))
+    .where(and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!)))
     .returning();
-  if (!config) {
-    res.status(404).json({ error: "Flow not found" });
-    return;
-  }
+  if (!config) { res.status(404).json({ error: "Flow not found" }); return; }
   res.sendStatus(204);
 });
 

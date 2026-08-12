@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, or } from "drizzle-orm";
+import { eq, ilike, or, and } from "drizzle-orm";
 import { db, memoryEntriesTable } from "@workspace/db";
 import {
   ListMemoryEntriesResponse,
@@ -13,6 +13,7 @@ import {
   ListMemoryEntriesQueryParams,
 } from "@workspace/api-zod";
 import { randomUUID } from "crypto";
+import { requireRole } from "../middleware/require-role.js";
 
 const router: IRouter = Router();
 
@@ -22,10 +23,12 @@ router.get("/v1/memory/entries", async (req, res): Promise<void> => {
   const offset = params.success ? (params.data.offset ?? 0) : 0;
   const search = params.success ? params.data.search : undefined;
 
-  const query = db.select().from(memoryEntriesTable);
-  const whereCondition = search
+  const tenantFilter = eq(memoryEntriesTable.tenantId, req.tenantId!);
+  const searchFilter = search
     ? or(ilike(memoryEntriesTable.question, `%${search}%`), ilike(memoryEntriesTable.answer, `%${search}%`))
     : undefined;
+
+  const whereCondition = searchFilter ? and(tenantFilter, searchFilter) : tenantFilter;
 
   const entries = await db
     .select()
@@ -38,12 +41,10 @@ router.get("/v1/memory/entries", async (req, res): Promise<void> => {
   res.json(ListMemoryEntriesResponse.parse({ entries, total: total.length }));
 });
 
-router.post("/v1/memory/entries", async (req, res): Promise<void> => {
+router.post("/v1/memory/entries", requireRole("ANALYST"), async (req, res): Promise<void> => {
   const parsed = CreateMemoryEntryBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
   const [entry] = await db
     .insert(memoryEntriesTable)
     .values({
@@ -53,50 +54,44 @@ router.post("/v1/memory/entries", async (req, res): Promise<void> => {
       confidence: parsed.data.confidence ?? 1.0,
       hitCount: 0,
       tier: "L3",
+      tenantId: req.tenantId!,
     })
     .returning();
   res.status(201).json(entry);
 });
 
-router.put("/v1/memory/entries/:id", async (req, res): Promise<void> => {
+router.put("/v1/memory/entries/:id", requireRole("ANALYST"), async (req, res): Promise<void> => {
   const params = UpdateMemoryEntryParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateMemoryEntryBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
   const [entry] = await db
     .update(memoryEntriesTable)
     .set(parsed.data)
-    .where(eq(memoryEntriesTable.id, params.data.id))
+    .where(and(eq(memoryEntriesTable.id, params.data.id), eq(memoryEntriesTable.tenantId, req.tenantId!)))
     .returning();
-  if (!entry) {
-    res.status(404).json({ error: "Memory entry not found" });
-    return;
-  }
+  if (!entry) { res.status(404).json({ error: "Memory entry not found" }); return; }
   res.json(UpdateMemoryEntryResponse.parse(entry));
 });
 
-router.delete("/v1/memory/entries/:id", async (req, res): Promise<void> => {
+router.delete("/v1/memory/entries/:id", requireRole("ANALYST"), async (req, res): Promise<void> => {
   const params = DeleteMemoryEntryParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [entry] = await db.delete(memoryEntriesTable).where(eq(memoryEntriesTable.id, params.data.id)).returning();
-  if (!entry) {
-    res.status(404).json({ error: "Memory entry not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [entry] = await db
+    .delete(memoryEntriesTable)
+    .where(and(eq(memoryEntriesTable.id, params.data.id), eq(memoryEntriesTable.tenantId, req.tenantId!)))
+    .returning();
+  if (!entry) { res.status(404).json({ error: "Memory entry not found" }); return; }
   res.sendStatus(204);
 });
 
-router.get("/v1/memory/stats", async (_req, res): Promise<void> => {
-  const entries = await db.select().from(memoryEntriesTable);
+router.get("/v1/memory/stats", async (req, res): Promise<void> => {
+  const entries = await db
+    .select()
+    .from(memoryEntriesTable)
+    .where(eq(memoryEntriesTable.tenantId, req.tenantId!));
   const l1 = entries.filter((e) => e.tier === "L1");
   const l2 = entries.filter((e) => e.tier === "L2");
   const l3 = entries.filter((e) => e.tier === "L3");
@@ -118,8 +113,11 @@ router.get("/v1/memory/stats", async (_req, res): Promise<void> => {
   );
 });
 
-router.post("/v1/memory/train", async (_req, res): Promise<void> => {
-  const entries = await db.select().from(memoryEntriesTable);
+router.post("/v1/memory/train", requireRole("ADMIN"), async (req, res): Promise<void> => {
+  const entries = await db
+    .select()
+    .from(memoryEntriesTable)
+    .where(eq(memoryEntriesTable.tenantId, req.tenantId!));
   for (const entry of entries) {
     let tier = "L3";
     if (entry.hitCount >= 50 && entry.confidence >= 0.85) tier = "L1";

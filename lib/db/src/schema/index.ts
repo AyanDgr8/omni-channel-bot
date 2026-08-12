@@ -11,3 +11,7 @@ export * from "./email_agent_config";
 export * from "./writing_style_profiles";
 export * from "./personas";
 export * from "./persona_traits";
+export * from "./tenants";
+export * from "./users";
+export * from "./tenant_dids";
+export * from "./audit_log";

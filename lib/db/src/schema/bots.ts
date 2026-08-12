@@ -32,6 +32,15 @@ export const botsTable = pgTable("bots", {
   /** seconds of caller silence before first re-prompt (default 6) */
   silenceRecoverySecs: integer("silence_recovery_secs").notNull().default(6),
 
+  /** VoxAgent organisation this bot belongs to */
+  tenantId: text("tenant_id").notNull(),
+
+  /**
+   * Per-bot active persona (Option A: coexists with personas.is_active which
+   * remains a UI-level convenience flag). Null = no persona assigned to this bot.
+   */
+  activePersonaId: text("active_persona_id"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

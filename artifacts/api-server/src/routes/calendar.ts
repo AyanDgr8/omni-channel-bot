@@ -11,10 +11,8 @@ const router: IRouter = Router();
 
 router.post("/v1/calendar/invite", async (req, res): Promise<void> => {
   const parsed = CreateCalendarInviteBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
   const [invite] = await db
     .insert(calendarInvitesTable)
     .values({
@@ -28,6 +26,7 @@ router.post("/v1/calendar/invite", async (req, res): Promise<void> => {
       location: parsed.data.location ?? null,
       callId: parsed.data.callId ?? null,
       calendarEventId: `cal_${randomUUID().split("-")[0]}`,
+      tenantId: req.tenantId!,
     })
     .returning();
   res.status(201).json(invite);
@@ -35,10 +34,7 @@ router.post("/v1/calendar/invite", async (req, res): Promise<void> => {
 
 router.get("/v1/calendar/slots", async (req, res): Promise<void> => {
   const params = GetAvailableSlotsQueryParams.safeParse(req.query);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
   const date = new Date(params.data.date);
   const slots = [];

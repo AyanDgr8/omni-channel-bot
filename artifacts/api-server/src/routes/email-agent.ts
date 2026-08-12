@@ -1,21 +1,26 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, emailAgentConfigTable, writingStyleProfilesTable } from "@workspace/db";
+import { randomUUID } from "crypto";
 
 const router: IRouter = Router();
 
 // ─── MS Graph token cache ───────────────────────────────────────────────────
 let _tokenCache: { token: string; expiresAt: number } | null = null;
 
+/**
+ * getGraphToken — authenticates with MS identity platform.
+ * Note: `msTenantId` here is the Azure AD tenant ID (not the VoxAgent org ID).
+ */
 async function getGraphToken(cfg: {
-  tenantId: string;
+  msTenantId: string;
   clientId: string;
   clientSecret: string;
 }): Promise<string> {
   if (_tokenCache && Date.now() < _tokenCache.expiresAt - 60_000) {
     return _tokenCache.token;
   }
-  const url = `https://login.microsoftonline.com/${cfg.tenantId}/oauth2/v2.0/token`;
+  const url = `https://login.microsoftonline.com/${cfg.msTenantId}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
     grant_type: "client_credentials",
     client_id: cfg.clientId,
@@ -32,7 +37,10 @@ async function getGraphToken(cfg: {
   return _tokenCache.token;
 }
 
-async function graphGet(path: string, cfg: { tenantId: string; clientId: string; clientSecret: string }) {
+async function graphGet(
+  path: string,
+  cfg: { msTenantId: string; clientId: string; clientSecret: string }
+) {
   const token = await getGraphToken(cfg);
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -47,7 +55,7 @@ async function graphGet(path: string, cfg: { tenantId: string; clientId: string;
 async function graphPost(
   path: string,
   body: unknown,
-  cfg: { tenantId: string; clientId: string; clientSecret: string }
+  cfg: { msTenantId: string; clientId: string; clientSecret: string }
 ) {
   const token = await getGraphToken(cfg);
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
@@ -63,25 +71,36 @@ async function graphPost(
   return res.json();
 }
 
-async function getConfig() {
-  const rows = await db.select().from(emailAgentConfigTable).where(eq(emailAgentConfigTable.id, "default"));
-  if (!rows.length) return null;
-  return rows[0];
+async function getConfig(voxTenantId: string) {
+  const [row] = await db
+    .select()
+    .from(emailAgentConfigTable)
+    .where(eq(emailAgentConfigTable.voxTenantId, voxTenantId))
+    .limit(1);
+  return row ?? null;
+}
+
+async function ensureStyleProfile(voxTenantId: string) {
+  let [row] = await db
+    .select()
+    .from(writingStyleProfilesTable)
+    .where(eq(writingStyleProfilesTable.tenantId, voxTenantId))
+    .limit(1);
+  if (!row) {
+    [row] = await db
+      .insert(writingStyleProfilesTable)
+      .values({ id: randomUUID(), tenantId: voxTenantId })
+      .returning();
+  }
+  return row;
 }
 
 // ─── Config CRUD ─────────────────────────────────────────────────────────────
 
 router.get("/v1/email-agent/config", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg) {
-    res.json({
-      id: "default",
-      tenantId: "",
-      clientId: "",
-      clientSecret: "",
-      userEmail: "",
-      isEnabled: false,
-    });
+    res.json({ msTenantId: "", clientId: "", clientSecret: "", userEmail: "", isEnabled: false });
     return;
   }
   // Never expose the clientSecret back to the frontend
@@ -89,32 +108,42 @@ router.get("/v1/email-agent/config", async (req, res) => {
 });
 
 router.put("/v1/email-agent/config", async (req, res) => {
-  const { tenantId, clientId, clientSecret, userEmail, isEnabled } = req.body as {
-    tenantId: string;
+  const { tenantId: msTenantId, clientId, clientSecret, userEmail, isEnabled } = req.body as {
+    tenantId: string;   // MS Azure AD tenant ID from user input
     clientId: string;
     clientSecret?: string;
     userEmail: string;
     isEnabled: boolean;
   };
-  const existing = await getConfig();
-  // Keep the stored secret if the caller sends the masked placeholder
+  const existing = await getConfig(req.tenantId!);
   const secretToStore =
     clientSecret && clientSecret !== "••••••••" ? clientSecret : (existing?.clientSecret ?? "");
 
-  await db
-    .insert(emailAgentConfigTable)
-    .values({ id: "default", tenantId, clientId, clientSecret: secretToStore, userEmail, isEnabled })
-    .onConflictDoUpdate({
-      target: emailAgentConfigTable.id,
-      set: { tenantId, clientId, clientSecret: secretToStore, userEmail, isEnabled, updatedAt: new Date() },
-    });
-  _tokenCache = null; // invalidate cached token
+  if (existing) {
+    await db
+      .update(emailAgentConfigTable)
+      .set({ msTenantId, clientId, clientSecret: secretToStore, userEmail, isEnabled, updatedAt: new Date() })
+      .where(eq(emailAgentConfigTable.id, existing.id));
+  } else {
+    await db
+      .insert(emailAgentConfigTable)
+      .values({
+        id: randomUUID(),
+        msTenantId,
+        clientId,
+        clientSecret: secretToStore,
+        userEmail,
+        isEnabled,
+        voxTenantId: req.tenantId!,
+      });
+  }
+  _tokenCache = null;
   res.json({ success: true });
 });
 
 router.post("/v1/email-agent/test-connection", async (req, res) => {
-  const cfg = await getConfig();
-  if (!cfg || !cfg.tenantId || !cfg.clientId || !cfg.clientSecret || !cfg.userEmail) {
+  const cfg = await getConfig(req.tenantId!);
+  if (!cfg || !cfg.msTenantId || !cfg.clientId || !cfg.clientSecret || !cfg.userEmail) {
     res.status(400).json({ success: false, error: "Configuration incomplete" });
     return;
   }
@@ -130,7 +159,7 @@ router.post("/v1/email-agent/test-connection", async (req, res) => {
 // ─── Inbox ───────────────────────────────────────────────────────────────────
 
 router.get("/v1/email-agent/inbox", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
   const top = Number(req.query.top ?? 30);
   const skip = Number(req.query.skip ?? 0);
@@ -144,11 +173,10 @@ router.get("/v1/email-agent/inbox", async (req, res) => {
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 router.get("/v1/email-agent/search", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
   const q = String(req.query.q ?? "");
   if (!q) { res.status(400).json({ error: "q is required" }); return; }
-  // Build OData filter — support free-text search via $search
   const data = await graphGet(
     `/users/${cfg.userEmail}/messages?$search="${encodeURIComponent(q)}"&$top=20&$select=id,subject,from,receivedDateTime,isRead,bodyPreview`,
     cfg
@@ -159,7 +187,7 @@ router.get("/v1/email-agent/search", async (req, res) => {
 // ─── Single message / thread ─────────────────────────────────────────────────
 
 router.get("/v1/email-agent/message/:id", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
   const data = await graphGet(
     `/users/${cfg.userEmail}/messages/${req.params.id}?$select=id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments`,
@@ -169,7 +197,7 @@ router.get("/v1/email-agent/message/:id", async (req, res) => {
 });
 
 router.get("/v1/email-agent/thread/:conversationId", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
   const data = await graphGet(
     `/users/${cfg.userEmail}/messages?$filter=conversationId eq '${req.params.conversationId}'&$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview&$orderby=receivedDateTime asc&$top=50`,
@@ -181,16 +209,14 @@ router.get("/v1/email-agent/thread/:conversationId", async (req, res) => {
 // ─── Reply draft ─────────────────────────────────────────────────────────────
 
 router.post("/v1/email-agent/reply", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
   const { messageId, body, send } = req.body as { messageId: string; body: string; send?: boolean };
   if (send) {
     await graphPost(`/users/${cfg.userEmail}/messages/${messageId}/reply`, { message: { body: { contentType: "HTML", content: body } }, comment: "" }, cfg);
     res.json({ success: true, sent: true });
   } else {
-    // Create a draft reply
     const draft = await graphPost(`/users/${cfg.userEmail}/messages/${messageId}/createReply`, {}, cfg);
-    // Update the draft body
     await fetch(`https://graph.microsoft.com/v1.0/users/${cfg.userEmail}/messages/${(draft as any).id}`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${await getGraphToken(cfg)}`, "Content-Type": "application/json" },
@@ -203,7 +229,7 @@ router.post("/v1/email-agent/reply", async (req, res) => {
 // ─── Send call summary ───────────────────────────────────────────────────────
 
 router.post("/v1/email-agent/send-summary", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
   const { toEmail, customerName, summary, subject } = req.body as {
     toEmail: string;
@@ -212,9 +238,7 @@ router.post("/v1/email-agent/send-summary", async (req, res) => {
     subject?: string;
   };
 
-  // Fetch writing style template
-  const styleRows = await db.select().from(writingStyleProfilesTable).where(eq(writingStyleProfilesTable.id, "default"));
-  const style = styleRows[0];
+  const style = await ensureStyleProfile(req.tenantId!);
   const template = style?.callSummaryTemplate ??
     "Hi {{customerName}},\n\nThank you for speaking with us today.\n\n{{summary}}\n\n{{signOff}}";
   const signOff = style?.signOff ?? "Best regards,";
@@ -222,7 +246,6 @@ router.post("/v1/email-agent/send-summary", async (req, res) => {
     .replace(/{{customerName}}/g, customerName)
     .replace(/{{summary}}/g, summary)
     .replace(/{{signOff}}/g, signOff);
-
   const htmlBody = bodyText.replace(/\n/g, "<br>");
   const emailSubject = subject ?? `Call Summary — ${new Date().toLocaleDateString()}`;
 
@@ -245,12 +268,8 @@ router.post("/v1/email-agent/send-summary", async (req, res) => {
 // ─── Writing style ───────────────────────────────────────────────────────────
 
 router.get("/v1/email-agent/style", async (req, res) => {
-  const rows = await db.select().from(writingStyleProfilesTable).where(eq(writingStyleProfilesTable.id, "default"));
-  if (!rows.length) {
-    res.json({ id: "default", greeting: "Hi,", signOff: "Best regards,", tone: "professional", callSummaryTemplate: "Hi {{customerName}},\n\nThank you for speaking with us today.\n\n{{summary}}\n\n{{signOff}}", styleExamples: [], learnedPatterns: {} });
-    return;
-  }
-  res.json(rows[0]);
+  const style = await ensureStyleProfile(req.tenantId!);
+  res.json(style);
 });
 
 router.put("/v1/email-agent/style", async (req, res) => {
@@ -260,20 +279,18 @@ router.put("/v1/email-agent/style", async (req, res) => {
     tone: string;
     callSummaryTemplate: string;
   };
+  const existing = await ensureStyleProfile(req.tenantId!);
   await db
-    .insert(writingStyleProfilesTable)
-    .values({ id: "default", greeting, signOff, tone, callSummaryTemplate })
-    .onConflictDoUpdate({
-      target: writingStyleProfilesTable.id,
-      set: { greeting, signOff, tone, callSummaryTemplate, updatedAt: new Date() },
-    });
+    .update(writingStyleProfilesTable)
+    .set({ greeting, signOff, tone, callSummaryTemplate, updatedAt: new Date() })
+    .where(and(eq(writingStyleProfilesTable.id, existing.id), eq(writingStyleProfilesTable.tenantId, req.tenantId!)));
   res.json({ success: true });
 });
 
 router.post("/v1/email-agent/learn-style", async (req, res) => {
-  const cfg = await getConfig();
+  const cfg = await getConfig(req.tenantId!);
   if (!cfg?.isEnabled) { res.status(400).json({ error: "Email agent not configured" }); return; }
-  // Fetch last 50 sent messages and extract patterns
+
   const data = (await graphGet(
     `/users/${cfg.userEmail}/mailFolders/SentItems/messages?$top=50&$select=body,subject&$orderby=sentDateTime desc`,
     cfg
@@ -284,7 +301,6 @@ router.post("/v1/email-agent/learn-style", async (req, res) => {
     .map((m) => m.body?.content?.replace(/<[^>]*>/g, "").slice(0, 300) ?? "")
     .filter(Boolean);
 
-  // Simple pattern extraction: most common greeting and sign-off
   const greetingCandidates = examples.map((e) => e.split("\n")[0]?.trim()).filter(Boolean);
   const signOffCandidates = examples.map((e) => {
     const lines = e.trim().split("\n").filter(Boolean);
@@ -300,13 +316,17 @@ router.post("/v1/email-agent/learn-style", async (req, res) => {
   const greeting = mode(greetingCandidates) || "Hi,";
   const signOff = mode(signOffCandidates) || "Best regards,";
 
+  const existing = await ensureStyleProfile(req.tenantId!);
   await db
-    .insert(writingStyleProfilesTable)
-    .values({ id: "default", greeting, signOff, styleExamples: examples, lastLearnedAt: new Date() })
-    .onConflictDoUpdate({
-      target: writingStyleProfilesTable.id,
-      set: { greeting, signOff, styleExamples: examples, learnedPatterns: { sampledAt: new Date().toISOString(), count: examples.length }, lastLearnedAt: new Date(), updatedAt: new Date() },
-    });
+    .update(writingStyleProfilesTable)
+    .set({
+      greeting, signOff,
+      styleExamples: examples,
+      learnedPatterns: { sampledAt: new Date().toISOString(), count: examples.length },
+      lastLearnedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(writingStyleProfilesTable.id, existing.id), eq(writingStyleProfilesTable.tenantId, req.tenantId!)));
 
   res.json({ success: true, greeting, signOff, sampledCount: examples.length });
 });

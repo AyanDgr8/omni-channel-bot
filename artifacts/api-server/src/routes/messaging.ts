@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, messageLogsTable } from "@workspace/db";
 import {
   SendWhatsAppBody,
@@ -17,10 +17,8 @@ const router: IRouter = Router();
 
 router.post("/v1/messaging/whatsapp", async (req, res): Promise<void> => {
   const parsed = SendWhatsAppBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
   const msgId = `wa_${randomUUID().split("-")[0]}`;
   await db.insert(messageLogsTable).values({
     id: randomUUID(),
@@ -30,16 +28,15 @@ router.post("/v1/messaging/whatsapp", async (req, res): Promise<void> => {
     messageId: msgId,
     status: "sent",
     callId: parsed.data.callId ?? null,
+    tenantId: req.tenantId!,
   });
   res.json(SendWhatsAppResponse.parse({ success: true, messageId: msgId, channel: "whatsapp", deliveryStatus: "sent" }));
 });
 
 router.post("/v1/messaging/telegram", async (req, res): Promise<void> => {
   const parsed = SendTelegramBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
   const msgId = `tg_${randomUUID().split("-")[0]}`;
   await db.insert(messageLogsTable).values({
     id: randomUUID(),
@@ -48,16 +45,15 @@ router.post("/v1/messaging/telegram", async (req, res): Promise<void> => {
     messageId: msgId,
     status: "sent",
     callId: parsed.data.callId ?? null,
+    tenantId: req.tenantId!,
   });
   res.json(SendTelegramResponse.parse({ success: true, messageId: msgId, channel: "telegram", deliveryStatus: "sent" }));
 });
 
 router.post("/v1/messaging/email", async (req, res): Promise<void> => {
   const parsed = SendEmailBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
   const msgId = `em_${randomUUID().split("-")[0]}`;
   await db.insert(messageLogsTable).values({
     id: randomUUID(),
@@ -67,6 +63,7 @@ router.post("/v1/messaging/email", async (req, res): Promise<void> => {
     messageId: msgId,
     status: "sent",
     callId: parsed.data.callId ?? null,
+    tenantId: req.tenantId!,
   });
   res.json(SendEmailResponse.parse({ success: true, messageId: msgId, channel: "email", deliveryStatus: "sent" }));
 });
@@ -76,10 +73,13 @@ router.get("/v1/messaging/logs", async (req, res): Promise<void> => {
   const limit = params.success ? (params.data.limit ?? 50) : 50;
   const channel = params.success ? params.data.channel : undefined;
 
+  const conditions = [eq(messageLogsTable.tenantId, req.tenantId!)];
+  if (channel) conditions.push(eq(messageLogsTable.channel, channel));
+
   const logs = await db
     .select()
     .from(messageLogsTable)
-    .where(channel ? eq(messageLogsTable.channel, channel) : undefined)
+    .where(and(...conditions))
     .limit(limit);
 
   res.json(ListMessageLogsResponse.parse(logs));

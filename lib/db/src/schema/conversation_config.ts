@@ -14,6 +14,8 @@ export const conversationConfigTable = pgTable("conversation_config", {
   responseTimeoutSec: integer("response_timeout_sec").notNull().default(5),
   speakingRate: real("speaking_rate").notNull().default(1.0),
   interWordPauseMs: integer("inter_word_pause_ms").notNull().default(0),
+  /** VoxAgent organisation; replaces the single id='default' singleton pattern */
+  tenantId: text("tenant_id").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

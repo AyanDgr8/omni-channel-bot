@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
 import { db, callsTable, botsTable, memoryEntriesTable } from "@workspace/db";
 import {
   GetStatsOverviewResponse,
@@ -8,30 +9,27 @@ import {
   GetLanguageMixResponse,
   GetCallIntelligenceResponse,
 } from "@workspace/api-zod";
-import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/v1/stats/overview", async (_req, res): Promise<void> => {
-  const allCalls = await db.select().from(callsTable);
-  const allBots = await db.select().from(botsTable);
-  const memEntries = await db.select().from(memoryEntriesTable);
+router.get("/v1/stats/overview", async (req, res): Promise<void> => {
+  const tenantId = req.tenantId!;
+  const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
+  const allBots = await db.select().from(botsTable).where(eq(botsTable.tenantId, tenantId));
+  const memEntries = await db.select().from(memoryEntriesTable).where(eq(memoryEntriesTable.tenantId, tenantId));
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const activeCalls = allCalls.filter((c) => c.status === "IN_PROGRESS" || c.status === "RINGING" || c.status === "INITIATING").length;
+  const activeCalls = allCalls.filter((c) => ["IN_PROGRESS", "RINGING", "INITIATING"].includes(c.status)).length;
   const completedToday = allCalls.filter((c) => c.endedAt && new Date(c.endedAt) >= today && c.status === "COMPLETED").length;
   const completed = allCalls.filter((c) => c.status === "COMPLETED");
   const successRate = allCalls.length > 0 ? (completed.length / allCalls.length) * 100 : 0;
   const durations = completed.filter((c) => c.durationSeconds).map((c) => c.durationSeconds!);
   const avgDuration = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
-
   const humanCalls = allCalls.filter((c) => c.amdResult === "HUMAN").length;
   const amdTotal = allCalls.filter((c) => c.amdResult).length;
   const amdAccuracy = amdTotal > 0 ? (humanCalls / amdTotal) * 100 : 0;
-
-  const totalHits = memEntries.reduce((a, e) => a + e.hitCount, 0);
   const memoryHitRate = memEntries.length > 0 ? Math.min(95, 60 + memEntries.length * 2) : 0;
 
   res.json(
@@ -48,115 +46,101 @@ router.get("/v1/stats/overview", async (_req, res): Promise<void> => {
   );
 });
 
-router.get("/v1/stats/calls-by-hour", async (_req, res): Promise<void> => {
+router.get("/v1/stats/calls-by-hour", async (req, res): Promise<void> => {
+  const tenantId = req.tenantId!;
   const now = new Date();
+  const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
   const hours: Array<{ hour: string; inbound: number; outbound: number }> = [];
-
-  const allCalls = await db.select().from(callsTable);
 
   for (let i = 23; i >= 0; i--) {
     const h = new Date(now);
     h.setHours(now.getHours() - i, 0, 0, 0);
     const hEnd = new Date(h);
     hEnd.setHours(h.getHours() + 1);
-
     const label = h.toLocaleTimeString("en-US", { hour: "2-digit", hour12: false });
-    const inCalls = allCalls.filter(
-      (c) => c.createdAt >= h && c.createdAt < hEnd && c.direction === "INBOUND"
-    );
-    const outCalls = allCalls.filter(
-      (c) => c.createdAt >= h && c.createdAt < hEnd && c.direction === "OUTBOUND"
-    );
-    hours.push({ hour: label, inbound: inCalls.length, outbound: outCalls.length });
+    hours.push({
+      hour: label,
+      inbound: allCalls.filter((c) => c.createdAt >= h && c.createdAt < hEnd && c.direction === "INBOUND").length,
+      outbound: allCalls.filter((c) => c.createdAt >= h && c.createdAt < hEnd && c.direction === "OUTBOUND").length,
+    });
   }
-
   res.json(GetCallsByHourResponse.parse(hours));
 });
 
-router.get("/v1/stats/hangup-reasons", async (_req, res): Promise<void> => {
-  const allCalls = await db.select().from(callsTable);
+router.get("/v1/stats/hangup-reasons", async (req, res): Promise<void> => {
+  const tenantId = req.tenantId!;
+  const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
   const total = allCalls.filter((c) => c.hangupReason).length;
-
   const counts: Record<string, number> = {};
   for (const call of allCalls) {
-    if (call.hangupReason) {
-      counts[call.hangupReason] = (counts[call.hangupReason] ?? 0) + 1;
-    }
+    if (call.hangupReason) counts[call.hangupReason] = (counts[call.hangupReason] ?? 0) + 1;
   }
-
   const reasons = Object.entries(counts).map(([reason, count]) => ({
     reason,
     count,
     percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
   }));
-
   res.json(GetHangupReasonsResponse.parse(reasons));
 });
 
-router.get("/v1/stats/connect-outcomes", async (_req, res): Promise<void> => {
-  const allCalls = await db.select().from(callsTable);
+router.get("/v1/stats/connect-outcomes", async (req, res): Promise<void> => {
+  const tenantId = req.tenantId!;
+  const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
   const withOutcome = allCalls.filter((c) => c.connectOutcome);
   const total = withOutcome.length;
-
   const counts: Record<string, number> = {};
   for (const call of withOutcome) {
     const key = call.connectOutcome!;
     counts[key] = (counts[key] ?? 0) + 1;
   }
-
   const outcomes = Object.entries(counts).map(([outcome, count]) => ({
     outcome,
     count,
     percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
   }));
-
   res.json(GetConnectOutcomesResponse.parse(outcomes));
 });
 
-router.get("/v1/stats/language-mix", async (_req, res): Promise<void> => {
-  const allCalls = await db.select().from(callsTable);
+router.get("/v1/stats/language-mix", async (req, res): Promise<void> => {
+  const tenantId = req.tenantId!;
+  const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
   const withLang = allCalls.filter((c) => c.languageDetected);
   const total = withLang.length;
-
   const counts: Record<string, number> = {};
   for (const call of withLang) {
     const key = call.languageDetected!;
     counts[key] = (counts[key] ?? 0) + 1;
   }
-
   const languages = Object.entries(counts).map(([language, count]) => ({
     language,
     count,
     percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
   }));
-
   res.json(GetLanguageMixResponse.parse(languages));
 });
 
-router.get("/v1/stats/call-intelligence", async (_req, res): Promise<void> => {
-  const allCalls = await db.select().from(callsTable);
-  const analyzed = allCalls.filter((c) => c.status === "COMPLETED" || c.status === "FAILED");
-  const n = analyzed.length;
-
-  const avgInterruptions = n > 0
-    ? Math.round((analyzed.reduce((s, c) => s + (c.interruptionCount ?? 0), 0) / n) * 10) / 10
-    : 0;
-  const avgEscalations = n > 0
-    ? Math.round((analyzed.reduce((s, c) => s + (c.escalationCount ?? 0), 0) / n) * 10) / 10
-    : 0;
-  const bargeInCalls = analyzed.filter((c) => (c.interruptionCount ?? 0) > 0).length;
-  const bargeInRate = n > 0 ? Math.round((bargeInCalls / n) * 1000) / 10 : 0;
-  const totalLanguageSwitches = analyzed.reduce((s, c) => {
+router.get("/v1/stats/call-intelligence", async (req, res): Promise<void> => {
+  const tenantId = req.tenantId!;
+  const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
+  const total = allCalls.length;
+  if (total === 0) {
+    res.json(GetCallIntelligenceResponse.parse({ totalAnalyzed: 0, avgInterruptionsPerCall: 0, avgEscalationsPerCall: 0, bargeInRate: 0, avgLanguageSwitchesPerCall: 0 }));
+    return;
+  }
+  const avgInterruptions = allCalls.reduce((s, c) => s + (c.interruptionCount ?? 0), 0) / total;
+  const avgEscalations = allCalls.reduce((s, c) => s + (c.escalationCount ?? 0), 0) / total;
+  const withBarge = allCalls.filter((c) => (c.interruptionCount ?? 0) > 0).length;
+  const bargeInRate = (withBarge / total) * 100;
+  const avgSwitches = allCalls.reduce((s, c) => {
     const switches = Array.isArray(c.languageSwitches) ? (c.languageSwitches as unknown[]).length : 0;
     return s + switches;
-  }, 0);
-
+  }, 0) / total;
   res.json(GetCallIntelligenceResponse.parse({
-    avgInterruptions,
-    avgEscalations,
-    bargeInRate,
-    totalLanguageSwitches,
-    totalCallsAnalyzed: n,
+    totalAnalyzed: total,
+    avgInterruptionsPerCall: Math.round(avgInterruptions * 10) / 10,
+    avgEscalationsPerCall: Math.round(avgEscalations * 10) / 10,
+    bargeInRate: Math.round(bargeInRate * 10) / 10,
+    avgLanguageSwitchesPerCall: Math.round(avgSwitches * 10) / 10,
   }));
 });
 

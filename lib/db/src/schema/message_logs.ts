@@ -10,6 +10,8 @@ export const messageLogsTable = pgTable("message_logs", {
   messageId: text("message_id"),
   status: text("status").notNull().default("sent"),
   callId: text("call_id"),
+  /** VoxAgent organisation this message belongs to */
+  tenantId: text("tenant_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

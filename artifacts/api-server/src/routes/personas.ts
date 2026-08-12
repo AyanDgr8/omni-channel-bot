@@ -4,6 +4,8 @@ import { db, personasTable, personaTraitsTable, llmConfigTable } from "@workspac
 import type { PersonaTraitsJson } from "@workspace/db";
 import { resolvePersonaTraits, refinePersonaTraits, TraitsSchema } from "../lib/persona-service";
 import { composeSystemPrompt, extractVoiceSettings, validatePersonaForVoiceBot } from "../lib/persona-composer";
+import { requireRole } from "../middleware/require-role";
+import { auditMiddleware } from "../middleware/audit";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -20,8 +22,11 @@ async function getLatestTraits(personaId: string) {
   return rows[0] ?? null;
 }
 
-async function getPersonaWithTraits(personaId: string) {
-  const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, personaId));
+async function getPersonaWithTraits(personaId: string, tenantId: string) {
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, personaId), eq(personasTable.tenantId, tenantId)));
   if (!persona) return null;
   const traits = await getLatestTraits(personaId);
   return { ...persona, traits: traits ?? null };
@@ -29,9 +34,13 @@ async function getPersonaWithTraits(personaId: string) {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-router.get("/v1/personas", async (_req, res) => {
-  const personas = await db.select().from(personasTable).orderBy(desc(personasTable.updatedAt));
-  // Attach latest traits summary (no full body for list view)
+router.get("/v1/personas", async (req, res) => {
+  const personas = await db
+    .select()
+    .from(personasTable)
+    .where(eq(personasTable.tenantId, req.tenantId!))
+    .orderBy(desc(personasTable.updatedAt));
+
   const result = await Promise.all(
     personas.map(async (p) => {
       const t = await getLatestTraits(p.id);
@@ -49,31 +58,29 @@ router.get("/v1/personas", async (_req, res) => {
 // ─── Get single ──────────────────────────────────────────────────────────────
 
 router.get("/v1/personas/:id", async (req, res) => {
-  const data = await getPersonaWithTraits(req.params.id);
+  const data = await getPersonaWithTraits(req.params.id, req.tenantId!);
   if (!data) { res.status(404).json({ error: "Persona not found" }); return; }
   res.json(data);
 });
 
 // ─── Create + generate traits ────────────────────────────────────────────────
 
-router.post("/v1/personas", async (req, res) => {
+router.post("/v1/personas", requireRole("ADMIN"), auditMiddleware("persona"), async (req, res) => {
   const { name, description } = req.body as { name: string; description?: string };
   if (!name?.trim()) { res.status(400).json({ error: "name is required" }); return; }
 
-  // Check if this is a library lookup or new creation
   const existing = await db
     .select()
     .from(personasTable)
-    .where(eq(personasTable.name, name.trim()));
+    .where(and(eq(personasTable.name, name.trim()), eq(personasTable.tenantId, req.tenantId!)));
   if (existing.length) {
     res.status(409).json({ error: "A persona with that name already exists" });
     return;
   }
 
-  // Insert persona row first
   const [persona] = await db
     .insert(personasTable)
-    .values({ name: name.trim(), description, source: "llm_generated", version: 1 })
+    .values({ name: name.trim(), description, source: "llm_generated", version: 1, tenantId: req.tenantId! })
     .returning();
 
   try {
@@ -83,10 +90,10 @@ router.post("/v1/personas", async (req, res) => {
       version: 1,
       traits,
       generatedByModel: model,
+      tenantId: req.tenantId!,
     });
     res.status(201).json({ ...persona, traits, generatedByModel: model });
   } catch (err) {
-    // Clean up the persona row if trait generation failed
     await db.delete(personasTable).where(eq(personasTable.id, persona.id));
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err }, "Persona trait generation failed");
@@ -94,14 +101,18 @@ router.post("/v1/personas", async (req, res) => {
   }
 });
 
-// ─── Activate ────────────────────────────────────────────────────────────────
+// ─── Activate (Option A: sets UI-level isActive flag, scoped to this tenant) ─
 
-router.post("/v1/personas/:id/activate", async (req, res) => {
-  const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, req.params.id));
+router.post("/v1/personas/:id/activate", requireRole("ADMIN"), auditMiddleware("persona"), async (req, res) => {
+  const id = req.params.id as string;
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
 
-  // Task #13: block activation if identity fields are empty (voice bot protection)
-  const traits = await getLatestTraits(req.params.id);
+  // PE-03: block activation if identity fields are empty
+  const traits = await getLatestTraits(id);
   if (traits) {
     const validation = validatePersonaForVoiceBot(traits.traits);
     if (!validation.valid) {
@@ -113,33 +124,33 @@ router.post("/v1/personas/:id/activate", async (req, res) => {
     }
   }
 
-  // Deactivate all, then activate this one
-  await db.update(personasTable).set({ isActive: false });
+  // Deactivate all in THIS TENANT only, then activate this one
+  await db
+    .update(personasTable)
+    .set({ isActive: false })
+    .where(eq(personasTable.tenantId, req.tenantId!));
+
   const [updated] = await db
     .update(personasTable)
     .set({ isActive: true, updatedAt: new Date() })
-    .where(eq(personasTable.id, req.params.id))
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)))
     .returning();
   res.json(updated);
 });
 
 // ─── Update traits (manual edit) ─────────────────────────────────────────────
 
-router.put("/v1/personas/:id/traits", async (req, res) => {
-  const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, req.params.id));
+router.put("/v1/personas/:id/traits", requireRole("ADMIN"), auditMiddleware("persona"), async (req, res) => {
+  const id = req.params.id as string;
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
 
-  // Validate the traits body against TraitsSchema before persisting
   const parsed = TraitsSchema.safeParse(req.body);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map(i => ({
-      path: i.path,
-      message: i.message,
-    }));
-    res.status(400).json({
-      error: "Trait validation failed",
-      issues,
-    });
+    res.status(400).json({ error: "Trait validation failed", issues: parsed.error.issues });
     return;
   }
 
@@ -151,12 +162,13 @@ router.put("/v1/personas/:id/traits", async (req, res) => {
     version: newVersion,
     traits,
     generatedByModel: null,
+    tenantId: req.tenantId!,
   });
 
   const [updated] = await db
     .update(personasTable)
     .set({ source: "manual", version: newVersion, updatedAt: new Date() })
-    .where(eq(personasTable.id, req.params.id))
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)))
     .returning();
 
   res.json({ ...updated, traits });
@@ -164,32 +176,29 @@ router.put("/v1/personas/:id/traits", async (req, res) => {
 
 // ─── Regenerate traits via LLM ───────────────────────────────────────────────
 
-router.post("/v1/personas/:id/regenerate", async (req, res) => {
-  const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, req.params.id));
+router.post("/v1/personas/:id/regenerate", requireRole("ADMIN"), async (req, res) => {
+  const id = req.params.id as string;
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
 
   try {
-    const { traits, model } = await resolvePersonaTraits(
-      persona.id,
-      persona.name,
-      persona.description,
-      true // forceRegenerate
-    );
-
+    const { traits, model } = await resolvePersonaTraits(persona.id, persona.name, persona.description, true);
     const newVersion = persona.version + 1;
     await db.insert(personaTraitsTable).values({
       personaId: persona.id,
       version: newVersion,
       traits,
       generatedByModel: model,
+      tenantId: req.tenantId!,
     });
-
     const [updated] = await db
       .update(personasTable)
       .set({ source: "llm_generated", version: newVersion, updatedAt: new Date() })
-      .where(eq(personasTable.id, req.params.id))
+      .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)))
       .returning();
-
     res.json({ ...updated, traits, generatedByModel: model });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -199,16 +208,22 @@ router.post("/v1/personas/:id/regenerate", async (req, res) => {
 
 // ─── Refine traits with AI instruction ───────────────────────────────────────
 
-router.post("/v1/personas/:id/refine", async (req, res) => {
+router.post("/v1/personas/:id/refine", requireRole("ADMIN"), async (req, res) => {
+  const id = req.params.id as string;
   const { instruction } = req.body as { instruction: string };
   if (!instruction?.trim()) { res.status(400).json({ error: "instruction is required" }); return; }
 
-  const traitsRow = await getLatestTraits(req.params.id);
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
+  if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
+
+  const traitsRow = await getLatestTraits(id);
   if (!traitsRow) { res.status(404).json({ error: "No traits found for this persona" }); return; }
 
   try {
     const { traits: updatedTraits, model } = await refinePersonaTraits(traitsRow.traits, instruction);
-    // Return the updated traits + before for client-side diff — do NOT save yet (client approves first)
     res.json({ before: traitsRow.traits, after: updatedTraits, model });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -219,12 +234,23 @@ router.post("/v1/personas/:id/refine", async (req, res) => {
 // ─── Test persona (mock conversation) ────────────────────────────────────────
 
 router.post("/v1/personas/:id/test", async (req, res) => {
+  const id = req.params.id as string;
   const { message } = req.body as { message: string };
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
+  if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
+
   const traitsRow = await getLatestTraits(req.params.id);
   if (!traitsRow) { res.status(404).json({ error: "No traits found" }); return; }
 
   const systemPrompt = composeSystemPrompt(traitsRow.traits);
-  const [llmCfg] = await db.select().from(llmConfigTable).where(eq(llmConfigTable.id, "default"));
+  const [llmCfg] = await db
+    .select()
+    .from(llmConfigTable)
+    .where(eq(llmConfigTable.tenantId, req.tenantId!))
+    .limit(1);
   const _engine = llmCfg?.primary ?? "openai";
 
   try {
@@ -234,7 +260,6 @@ router.post("/v1/personas/:id/test", async (req, res) => {
       res.json({ reply: sample, engine: "simulated" });
       return;
     }
-
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15_000);
     try {
@@ -243,10 +268,7 @@ router.post("/v1/personas/:id/test", async (req, res) => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: message },
-          ],
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: message }],
           temperature: 0.8,
           max_tokens: 200,
         }),
@@ -260,7 +282,7 @@ router.post("/v1/personas/:id/test", async (req, res) => {
       clearTimeout(timer);
       throw e;
     }
-  } catch (err) {
+  } catch {
     const sample = traitsRow.traits.language.sample_utterances[0] ?? "How can I assist you today?";
     res.json({ reply: sample, engine: "simulated" });
   }
@@ -268,8 +290,8 @@ router.post("/v1/personas/:id/test", async (req, res) => {
 
 // ─── Duplicate ───────────────────────────────────────────────────────────────
 
-router.post("/v1/personas/:id/duplicate", async (req, res) => {
-  const data = await getPersonaWithTraits(req.params.id);
+router.post("/v1/personas/:id/duplicate", requireRole("ADMIN"), async (req, res) => {
+  const data = await getPersonaWithTraits(req.params.id as string, req.tenantId!);
   if (!data) { res.status(404).json({ error: "Persona not found" }); return; }
 
   const [newPersona] = await db
@@ -280,6 +302,7 @@ router.post("/v1/personas/:id/duplicate", async (req, res) => {
       source: data.source,
       version: 1,
       isActive: false,
+      tenantId: req.tenantId!,
     })
     .returning();
 
@@ -289,6 +312,7 @@ router.post("/v1/personas/:id/duplicate", async (req, res) => {
       version: 1,
       traits: data.traits.traits,
       generatedByModel: data.traits.generatedByModel,
+      tenantId: req.tenantId!,
     });
   }
 
@@ -297,20 +321,24 @@ router.post("/v1/personas/:id/duplicate", async (req, res) => {
 
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
-router.delete("/v1/personas/:id", async (req, res) => {
-  const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, req.params.id));
+router.delete("/v1/personas/:id", requireRole("ADMIN"), auditMiddleware("persona"), async (req, res) => {
+  const id = req.params.id as string;
+  const [persona] = await db
+    .select()
+    .from(personasTable)
+    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
-  await db.delete(personasTable).where(eq(personasTable.id, req.params.id));
+  await db.delete(personasTable).where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)));
   res.sendStatus(204);
 });
 
 // ─── Compose system prompt for active persona ─────────────────────────────────
 
-router.get("/v1/personas/active/compose", async (_req, res) => {
+router.get("/v1/personas/active/compose", async (req, res) => {
   const [active] = await db
     .select()
     .from(personasTable)
-    .where(eq(personasTable.isActive, true))
+    .where(and(eq(personasTable.isActive, true), eq(personasTable.tenantId, req.tenantId!)))
     .limit(1);
   if (!active) { res.status(404).json({ error: "No active persona" }); return; }
 

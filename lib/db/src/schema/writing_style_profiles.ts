@@ -11,6 +11,8 @@ export const writingStyleProfilesTable = pgTable("writing_style_profiles", {
   styleExamples: jsonb("style_examples").notNull().$type<string[]>().default([]),
   learnedPatterns: jsonb("learned_patterns").notNull().$type<Record<string, unknown>>().default({}),
   lastLearnedAt: timestamp("last_learned_at"),
+  /** VoxAgent organisation this profile belongs to */
+  tenantId: text("tenant_id").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

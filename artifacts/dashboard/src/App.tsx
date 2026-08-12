@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,7 +12,11 @@ import FlowEditor from "@/pages/flow-editor";
 import EmailAgent from "@/pages/email-agent";
 import Messaging from "@/pages/messaging";
 import CalendarPage from "@/pages/calendar";
+import LoginPage from "@/pages/login";
+import UsersPage from "@/pages/users";
 import NotFound from "@/pages/not-found";
+import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,22 +27,52 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Wraps a page: redirects to /login if not authenticated */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  return <>{children}</>;
+}
+
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/calls" component={Calls} />
-        <Route path="/bots" component={Bots} />
-        <Route path="/config" component={Config} />
-        <Route path="/memory" component={Memory} />
-        <Route path="/flow" component={FlowEditor} />
-        <Route path="/email-agent" component={EmailAgent} />
-        <Route path="/messaging" component={Messaging} />
-        <Route path="/calendar" component={CalendarPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      {/* Public route */}
+      <Route path="/login" component={LoginPage} />
+
+      {/* Protected routes — all wrapped in Layout */}
+      <Route>
+        <ProtectedRoute>
+          <Layout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/calls" component={Calls} />
+              <Route path="/bots" component={Bots} />
+              <Route path="/config" component={Config} />
+              <Route path="/memory" component={Memory} />
+              <Route path="/flow" component={FlowEditor} />
+              <Route path="/email-agent" component={EmailAgent} />
+              <Route path="/messaging" component={Messaging} />
+              <Route path="/calendar" component={CalendarPage} />
+              <Route path="/users" component={UsersPage} />
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        </ProtectedRoute>
+      </Route>
+    </Switch>
   );
 }
 

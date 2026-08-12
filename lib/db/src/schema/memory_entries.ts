@@ -11,6 +11,8 @@ export const memoryEntriesTable = pgTable("memory_entries", {
   tier: text("tier").notNull().default("L3"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastHitAt: timestamp("last_hit_at", { withTimezone: true }),
+  /** VoxAgent organisation this memory entry belongs to */
+  tenantId: text("tenant_id").notNull(),
 });
 
 export const insertMemoryEntrySchema = createInsertSchema(memoryEntriesTable).omit({ createdAt: true });

@@ -16,6 +16,8 @@ export const personaConfigTable = pgTable("persona_config", {
   fillerWordsEnabled: boolean("filler_words_enabled").notNull().default(false),
   greetingStyle: text("greeting_style").notNull().default("warm"),
   interruptMode: text("interrupt_mode").notNull().default("HARD_INTERRUPT"),
+  /** VoxAgent organisation; replaces the single id='default' singleton pattern */
+  tenantId: text("tenant_id").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
