@@ -7,3 +7,10 @@ uri = "file://artifacts/video/public/audio/bg_music.mp3"
 type = "audio"
 title = "VoxAgent background music"
 description = "Generated music: Corporate motivational cinematic instrumental, 100 BPM, clean synthesizers, light percussion, confident and forward-moving energy. Subtle intro build, steady groove in the middle, up…"
+
+[[outputs]]
+id = "fbIJgcOkKT1NGNjaP7OVe"
+uri = "file://docs/VoxAgent-BRD.md"
+type = "text"
+title = "VoxAgent — Business Requirements Document"
+description = "Complete BRD covering all 10 feature areas, data model, full API surface (40+ endpoints), non-functional requirements, and glossary."
