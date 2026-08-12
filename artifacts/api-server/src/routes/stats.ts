@@ -4,6 +4,9 @@ import {
   GetStatsOverviewResponse,
   GetCallsByHourResponse,
   GetHangupReasonsResponse,
+  GetConnectOutcomesResponse,
+  GetLanguageMixResponse,
+  GetCallIntelligenceResponse,
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
 
@@ -88,6 +91,73 @@ router.get("/v1/stats/hangup-reasons", async (_req, res): Promise<void> => {
   }));
 
   res.json(GetHangupReasonsResponse.parse(reasons));
+});
+
+router.get("/v1/stats/connect-outcomes", async (_req, res): Promise<void> => {
+  const allCalls = await db.select().from(callsTable);
+  const withOutcome = allCalls.filter((c) => c.connectOutcome);
+  const total = withOutcome.length;
+
+  const counts: Record<string, number> = {};
+  for (const call of withOutcome) {
+    const key = call.connectOutcome!;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+
+  const outcomes = Object.entries(counts).map(([outcome, count]) => ({
+    outcome,
+    count,
+    percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+  }));
+
+  res.json(GetConnectOutcomesResponse.parse(outcomes));
+});
+
+router.get("/v1/stats/language-mix", async (_req, res): Promise<void> => {
+  const allCalls = await db.select().from(callsTable);
+  const withLang = allCalls.filter((c) => c.languageDetected);
+  const total = withLang.length;
+
+  const counts: Record<string, number> = {};
+  for (const call of withLang) {
+    const key = call.languageDetected!;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+
+  const languages = Object.entries(counts).map(([language, count]) => ({
+    language,
+    count,
+    percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+  }));
+
+  res.json(GetLanguageMixResponse.parse(languages));
+});
+
+router.get("/v1/stats/call-intelligence", async (_req, res): Promise<void> => {
+  const allCalls = await db.select().from(callsTable);
+  const analyzed = allCalls.filter((c) => c.status === "COMPLETED" || c.status === "FAILED");
+  const n = analyzed.length;
+
+  const avgInterruptions = n > 0
+    ? Math.round((analyzed.reduce((s, c) => s + (c.interruptionCount ?? 0), 0) / n) * 10) / 10
+    : 0;
+  const avgEscalations = n > 0
+    ? Math.round((analyzed.reduce((s, c) => s + (c.escalationCount ?? 0), 0) / n) * 10) / 10
+    : 0;
+  const bargeInCalls = analyzed.filter((c) => (c.interruptionCount ?? 0) > 0).length;
+  const bargeInRate = n > 0 ? Math.round((bargeInCalls / n) * 1000) / 10 : 0;
+  const totalLanguageSwitches = analyzed.reduce((s, c) => {
+    const switches = Array.isArray(c.languageSwitches) ? (c.languageSwitches as unknown[]).length : 0;
+    return s + switches;
+  }, 0);
+
+  res.json(GetCallIntelligenceResponse.parse({
+    avgInterruptions,
+    avgEscalations,
+    bargeInRate,
+    totalLanguageSwitches,
+    totalCallsAnalyzed: n,
+  }));
 });
 
 export default router;

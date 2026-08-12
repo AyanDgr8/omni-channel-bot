@@ -65,6 +65,21 @@ ${behavior.dont_rules.map((r) => `• ${r}`).join("\n")}`);
   return sections.join("\n\n");
 }
 
+/**
+ * Validates a persona's identity fields for voice-bot readiness.
+ * Returns { valid, issues } — call this before stamping a persona onto a call.
+ */
+export function validatePersonaForVoiceBot(traits: PersonaTraitsJson): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  const { identity } = traits;
+  if (!identity.role_title?.trim()) issues.push("Identity: role_title is required");
+  if (!identity.backstory?.trim()) issues.push("Identity: backstory is required");
+  if (!identity.goals?.length || identity.goals.every((g) => !g.trim())) {
+    issues.push("Identity: at least one non-empty goal is required");
+  }
+  return { valid: issues.length === 0, issues };
+}
+
 export function extractVoiceSettings(traits: PersonaTraitsJson) {
   return {
     deepgramVoiceHint: traits.voice.deepgram_voice_hint,

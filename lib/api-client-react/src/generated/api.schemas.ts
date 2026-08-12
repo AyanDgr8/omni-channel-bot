@@ -58,6 +58,20 @@ export interface Call {
   /** @nullable */
   transferTarget?: string | null;
   followUpSent?: boolean;
+  /** @nullable */
+  personaId?: string | null;
+  /** @nullable */
+  personaName?: string | null;
+  /** @nullable */
+  composedPrompt?: string | null;
+  /** @nullable */
+  connectOutcome?: string | null;
+  interruptionCount?: number;
+  escalationCount?: number;
+  /** @nullable */
+  languageSwitches?: Record<string, unknown>[] | null;
+  /** @nullable */
+  finalDisposition?: string | null;
   createdAt: string;
 }
 

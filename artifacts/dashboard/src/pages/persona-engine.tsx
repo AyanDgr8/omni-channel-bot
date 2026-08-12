@@ -2,7 +2,7 @@
  * Agentic Persona Engine — full UI for the Persona Library tab in Configuration.
  * Drop-in replacement for the old Persona tab content.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -414,6 +414,23 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
 
   const currentTraits = editedTraits ?? detail?.traits?.traits ?? null;
+  const isDirty = editedTraits !== null;
+
+  // Task #12: warn before losing unsaved changes via browser tab/window close
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  function confirmLoseChanges(): boolean {
+    if (!isDirty) return true;
+    return window.confirm("You have unsaved trait edits. Leave without saving?");
+  }
 
   // Clear validation issues when the user edits traits (so they know their change was registered)
   function handleTraitsChange(t: PersonaTraits) {
@@ -461,7 +478,7 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
+          <button onClick={() => { if (confirmLoseChanges()) onBack(); }} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
             <ChevronLeft className="w-3.5 h-3.5" /> Back
           </button>
           <div>
@@ -490,12 +507,21 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
         </div>
       </div>
 
-      {/* Section tabs */}
+      {/* Section tabs — guard against losing unsaved changes (task #12) */}
       <div className="flex gap-1">
         {(["edit", "refine", "test"] as const).map(s => (
-          <button key={s} onClick={() => setActiveSection(s)}
+          <button key={s}
+            onClick={() => {
+              if (s !== "edit" && isDirty) {
+                if (!confirmLoseChanges()) return;
+                setEditedTraits(null);
+                setValidationIssues([]);
+              }
+              setActiveSection(s);
+            }}
             className={`px-3 py-1 rounded text-xs font-medium transition-colors capitalize ${activeSection === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
             {s === "refine" ? "Refine with AI" : s === "test" ? "Test Persona" : "Edit Traits"}
+            {s === "edit" && isDirty && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 align-middle" />}
           </button>
         ))}
       </div>

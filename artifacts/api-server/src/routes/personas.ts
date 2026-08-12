@@ -3,7 +3,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { db, personasTable, personaTraitsTable, llmConfigTable } from "@workspace/db";
 import type { PersonaTraitsJson } from "@workspace/db";
 import { resolvePersonaTraits, refinePersonaTraits, TraitsSchema } from "../lib/persona-service";
-import { composeSystemPrompt, extractVoiceSettings } from "../lib/persona-composer";
+import { composeSystemPrompt, extractVoiceSettings, validatePersonaForVoiceBot } from "../lib/persona-composer";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -99,6 +99,19 @@ router.post("/v1/personas", async (req, res) => {
 router.post("/v1/personas/:id/activate", async (req, res) => {
   const [persona] = await db.select().from(personasTable).where(eq(personasTable.id, req.params.id));
   if (!persona) { res.status(404).json({ error: "Persona not found" }); return; }
+
+  // Task #13: block activation if identity fields are empty (voice bot protection)
+  const traits = await getLatestTraits(req.params.id);
+  if (traits) {
+    const validation = validatePersonaForVoiceBot(traits.traits);
+    if (!validation.valid) {
+      res.status(422).json({
+        error: "Cannot activate persona with incomplete identity fields. The voice bot requires a role title, backstory, and at least one goal.",
+        issues: validation.issues,
+      });
+      return;
+    }
+  }
 
   // Deactivate all, then activate this one
   await db.update(personasTable).set({ isActive: false });

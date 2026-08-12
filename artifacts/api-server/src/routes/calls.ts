@@ -15,7 +15,7 @@ import {
   ListCallsQueryParams,
 } from "@workspace/api-zod";
 import { randomUUID } from "crypto";
-import { composeSystemPrompt } from "../lib/persona-composer.js";
+import { composeSystemPrompt, validatePersonaForVoiceBot } from "../lib/persona-composer.js";
 
 const router: IRouter = Router();
 
@@ -36,13 +36,34 @@ router.get("/v1/calls", async (req, res): Promise<void> => {
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
-  const calls = await db
+  const rawCalls = await db
     .select()
     .from(callsTable)
     .where(where)
     .orderBy(desc(callsTable.createdAt))
     .limit(limit)
     .offset(offset);
+
+  // Enrich with persona names via secondary lookup
+  const personaIds = [...new Set(rawCalls.map((c) => c.personaId).filter(Boolean))] as string[];
+  const personaMap: Record<string, string> = {};
+  if (personaIds.length > 0) {
+    const personas = await db
+      .select({ id: personasTable.id, name: personasTable.name })
+      .from(personasTable)
+      .where(eq(personasTable.id, personaIds[0]));
+    // Fetch all matching personas
+    const allPersonas = await db.select({ id: personasTable.id, name: personasTable.name }).from(personasTable);
+    for (const p of allPersonas) {
+      if (personaIds.includes(p.id)) personaMap[p.id] = p.name;
+    }
+    void personas; // suppress unused warning
+  }
+
+  const calls = rawCalls.map((c) => ({
+    ...c,
+    personaName: c.personaId ? (personaMap[c.personaId] ?? null) : null,
+  }));
 
   const totalResult = await db.select().from(callsTable).where(where);
   res.json(ListCallsResponse.parse({ calls, total: totalResult.length }));
@@ -249,6 +270,74 @@ router.post("/v1/calls/:id/conference", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetCallResponse.parse(call));
+});
+
+// ─── Task #17: Inbound call receive endpoint ────────────────────────────────
+// Webhook handler: creates an inbound call record stamped with the active persona.
+// Even when no active persona exists, the call is accepted — personaId is simply null.
+router.post("/v1/calls/receive", async (req, res): Promise<void> => {
+  const { from, botId } = req.body as { from?: string; botId?: string };
+  if (!botId) { res.status(400).json({ error: "botId is required" }); return; }
+
+  const [bot] = await db.select().from(botsTable).where(eq(botsTable.id, botId));
+  if (!bot) { res.status(400).json({ error: "Bot not found" }); return; }
+
+  let activePersonaId: string | null = null;
+  let activePersonaName: string | null = null;
+  let activeComposedPrompt: string | null = null;
+
+  try {
+    const [activePersona] = await db
+      .select()
+      .from(personasTable)
+      .where(eq(personasTable.isActive, true))
+      .limit(1);
+    if (activePersona) {
+      const [traitsRow] = await db
+        .select()
+        .from(personaTraitsTable)
+        .where(eq(personaTraitsTable.personaId, activePersona.id))
+        .orderBy(desc(personaTraitsTable.version))
+        .limit(1);
+      if (traitsRow) {
+        // Task #11/13: only stamp persona if identity fields are valid
+        const validation = validatePersonaForVoiceBot(traitsRow.traits);
+        if (validation.valid) {
+          activePersonaId = activePersona.id;
+          activePersonaName = activePersona.name;
+          activeComposedPrompt = composeSystemPrompt(traitsRow.traits);
+        } else {
+          console.warn(`[inbound] Active persona "${activePersona.name}" has invalid identity fields — not stamped on call. Issues: ${validation.issues.join("; ")}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[inbound] Failed to fetch active persona:", err);
+    // Non-fatal: proceed without persona stamping
+  }
+
+  const callId = randomUUID();
+  const [call] = await db
+    .insert(callsTable)
+    .values({
+      id: callId,
+      botId,
+      direction: "INBOUND",
+      status: "RINGING",
+      customerNumber: from ?? null,
+      startedAt: new Date(),
+      followUpSent: false,
+      personaId: activePersonaId,
+      composedPrompt: activeComposedPrompt,
+    })
+    .returning();
+
+  await db
+    .update(botsTable)
+    .set({ status: "BUSY", activeCalls: bot.activeCalls + 1 })
+    .where(eq(botsTable.id, bot.id));
+
+  res.status(201).json({ ...call, personaName: activePersonaName });
 });
 
 export default router;

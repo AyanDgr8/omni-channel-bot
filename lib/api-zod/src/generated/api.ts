@@ -49,6 +49,14 @@ export const ListCallsResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "personaName": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().optional(),
+  "escalationCount": zod.number().optional(),
+  "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "finalDisposition": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -95,6 +103,14 @@ export const GetCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "personaName": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().optional(),
+  "escalationCount": zod.number().optional(),
+  "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "finalDisposition": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -124,6 +140,14 @@ export const HangupCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "personaName": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().optional(),
+  "escalationCount": zod.number().optional(),
+  "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "finalDisposition": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -164,6 +188,14 @@ export const TransferCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "personaName": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().optional(),
+  "escalationCount": zod.number().optional(),
+  "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "finalDisposition": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -200,6 +232,14 @@ export const ConferenceCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish(),
+  "personaName": zod.string().nullish(),
+  "composedPrompt": zod.string().nullish(),
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().optional(),
+  "escalationCount": zod.number().optional(),
+  "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "finalDisposition": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -239,6 +279,40 @@ export const GetHangupReasonsResponseItem = zod.object({
   "percentage": zod.number()
 })
 export const GetHangupReasonsResponse = zod.array(GetHangupReasonsResponseItem)
+
+
+/**
+ * @summary Distribution of connect outcomes (AMD classification results)
+ */
+export const GetConnectOutcomesResponseItem = zod.object({
+  "outcome": zod.string(),
+  "count": zod.number(),
+  "percentage": zod.number()
+})
+export const GetConnectOutcomesResponse = zod.array(GetConnectOutcomesResponseItem)
+
+
+/**
+ * @summary Language mix distribution across all calls
+ */
+export const GetLanguageMixResponseItem = zod.object({
+  "language": zod.string(),
+  "count": zod.number(),
+  "percentage": zod.number()
+})
+export const GetLanguageMixResponse = zod.array(GetLanguageMixResponseItem)
+
+
+/**
+ * @summary Aggregate call intelligence metrics (barge-in, interruption, escalation)
+ */
+export const GetCallIntelligenceResponse = zod.object({
+  "avgInterruptions": zod.number(),
+  "avgEscalations": zod.number(),
+  "bargeInRate": zod.number(),
+  "totalLanguageSwitches": zod.number(),
+  "totalCallsAnalyzed": zod.number()
+})
 
 
 /**

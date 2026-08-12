@@ -323,7 +323,13 @@ export default function Calls() {
                       </td>
                       <td className="px-3 py-2.5 font-mono text-foreground">{call.customerNumber ?? "—"}</td>
                       <td className="px-3 py-2.5">
-                        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-medium ${statusColors[call.status] ?? ""}`}>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${statusColors[call.status] ?? ""}`}>
+                          {(call.status === "IN_PROGRESS" || call.status === "RINGING") && (
+                            <span className="relative flex h-1.5 w-1.5 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current" />
+                            </span>
+                          )}
                           {call.status}
                         </span>
                       </td>
@@ -346,9 +352,9 @@ export default function Calls() {
                       <td className="px-3 py-2.5 text-muted-foreground">{call.languageDetected?.toUpperCase() ?? "—"}</td>
                       <td className="px-3 py-2.5">
                         {hasPersona ? (
-                          <span className="inline-flex items-center gap-1 text-primary">
+                          <span className="inline-flex items-center gap-1 text-primary" title={(call as any).personaId ?? undefined}>
                             <Bot className="w-3 h-3 shrink-0" />
-                            <span className="text-[10px] font-medium">Active</span>
+                            <span className="text-[10px] font-medium truncate max-w-[90px]">{(call as any).personaName ?? "Active"}</span>
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-[10px]">—</span>
