@@ -87,7 +87,7 @@ brew services start mysql     # Mac, if you installed it with Homebrew
 Then create an empty database:
 
 ```bash
-mysql -u root -p -e "CREATE DATABASE \`omni-channel\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+mysql -u root -pWELcome@123 -e "CREATE DATABASE \`omni-channel\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
 ```
 
 It'll ask for your MySQL root password. If you've never set one, just press Enter.
@@ -126,8 +126,10 @@ FRONTEND_URL=https://maveai.voicemeetme.net:8678/
 API_PROXY_TARGET=https://localhost:8677
 
 # ── TLS ──────────────────────────────────────────────────
-# Both servers read privkey.pem + fullchain.pem from this folder.
-SSL_DIR=/absolute/path/to/Omni-Channel-Bot/ssl
+# Both servers serve HTTPS from these files. Relative paths resolve against the
+# project root, so these two lines work as-is.
+SSL_KEY_PATH=ssl/privkey.pem
+SSL_CERT_PATH=ssl/fullchain.pem
 ENABLE_HTTPS=true
 
 # ── Optional: AI provider keys ───────────────────────────
@@ -205,7 +207,7 @@ You should see something like:
 ```
 Running pending DB migrations
 DB migrations complete
-Loaded TLS certificate  sslDir: ".../Omni-Channel-Bot/ssl"
+Loaded TLS certificate  keyPath: ".../ssl/privkey.pem"  certPath: ".../ssl/fullchain.pem"
 Server listening  port: 8677  protocol: "https"
 ```
 
@@ -243,23 +245,28 @@ forward goes (see below).
 
 ### HTTPS
 
-Both servers serve TLS from the **`ssl/` folder at the root of this repository** — and nowhere
-else. Drop your Let's Encrypt files there:
+Both servers serve TLS from two files you name explicitly:
 
+```bash
+SSL_KEY_PATH=ssl/privkey.pem      # private key
+SSL_CERT_PATH=ssl/fullchain.pem   # certificate + intermediate chain
 ```
-ssl/privkey.pem      # private key           (required)
-ssl/fullchain.pem    # certificate + chain   (cert.pem is used if this is missing)
-```
 
-Those files are gitignored — never commit the private key. Renew them by replacing the files
-and restarting both servers.
+**Relative paths resolve against the project root**, not the working directory — which matters
+because `pnpm --filter` starts each process inside its own package folder. Absolute paths work
+too. The `ssl/` folder at the repo root is where this project keeps them; it's gitignored, so
+the private key is never committed. Renew by replacing the two files and restarting both servers.
 
-- Set `SSL_DIR` to read them from somewhere else.
-- Set `ENABLE_HTTPS=false` to run plain HTTP instead — useful behind a load balancer that
-  already terminates TLS, or for a laptop with no certificates.
+Two escape hatches:
 
-The API server serves HTTPS automatically whenever it finds that folder, and marks the session
-cookie `Secure` when it does.
+- `SSL_DIR=/some/folder` — used when `SSL_KEY_PATH` isn't set; expects Let's Encrypt's own
+  filenames inside (`privkey.pem` plus `fullchain.pem`, or `cert.pem`). With neither variable
+  set, the default is the repo's `ssl/`.
+- `ENABLE_HTTPS=false` — run plain HTTP even with certificates present. Use this behind a load
+  balancer that already terminates TLS, or on a laptop with no certificates.
+
+A typo in `SSL_KEY_PATH` is a startup error, not a silent fall back to HTTP. The API server
+also marks the session cookie `Secure` whenever HTTPS is on.
 
 ### Logging in
 
@@ -343,7 +350,8 @@ Once logged in, the left sidebar gives you:
 | `BACKEND_URL` | Recommended | The API server's public address, e.g. `https://maveai.voicemeetme.net:8677/`. |
 | `FRONTEND_URL` | Recommended | The dashboard's public address. Also the only origin CORS accepts; unset means "reflect any origin", which is dev-only. |
 | `API_PROXY_TARGET` | Optional | Where the dashboard's `/api` proxy actually dials. Defaults to `BACKEND_URL`; point it at `https://localhost:8677` when the public hostname doesn't resolve to the machine running the API. |
-| `SSL_DIR` | Optional | Folder holding `privkey.pem` + `fullchain.pem`. Defaults to the repo's `ssl/`. |
+| `SSL_KEY_PATH` `SSL_CERT_PATH` | ✅ For HTTPS | The private key and certificate chain, e.g. `ssl/privkey.pem` and `ssl/fullchain.pem`. Relative paths resolve against the project root. Set both or neither. |
+| `SSL_DIR` | Optional | Fallback when the two above are unset: a folder holding `privkey.pem` + `fullchain.pem`. Defaults to the repo's `ssl/`. |
 | `ENABLE_HTTPS` | Optional | `false` forces plain HTTP even with certificates present. |
 | `SESSION_SECRET` | ✅ In production | Signs the login cookie. Falls back to an insecure default in dev. |
 | `PROVIDER_KEY_SECRET` | ✅ In production | Encrypts your stored AI API keys (AES-256). Without it, production refuses to save keys. |
@@ -402,9 +410,15 @@ The variable isn't loaded in *this* terminal. Run `set -a && source .env && set 
 Same thing — the API server needs `PORT`, and the dashboard needs both `PORT` and `BASE_PATH`.
 `pnpm run dev:api` / `pnpm run dev:web` set them for you.
 
-**"ENABLE_HTTPS is set but no TLS material was found"**
-`ssl/privkey.pem` is missing (or `SSL_DIR` points at the wrong folder). Put the certificates in
-the repo's `ssl/` folder, or set `ENABLE_HTTPS=false` to run over plain HTTP.
+**"TLS is configured but unreadable" / "no TLS material was found"**
+`SSL_KEY_PATH` or `SSL_CERT_PATH` points at a file that isn't there. Remember relative paths are
+read from the project root, so `ssl/privkey.pem` means
+`/path/to/Omni-Channel-Bot/ssl/privkey.pem` no matter which folder you started from. Check with
+`ls -l ssl/`, or set `ENABLE_HTTPS=false` to run over plain HTTP.
+
+**"SSL_KEY_PATH and SSL_CERT_PATH must be set together"**
+You set one and not the other. Set both, or remove both and let `SSL_DIR` / the default `ssl/`
+folder take over.
 
 **Pages spin forever, or the browser reports a proxy error**
 The dashboard can't reach the API server. Check Terminal 1 is up, then check `API_PROXY_TARGET`
@@ -511,8 +525,9 @@ To deploy anywhere else:
 
 Migrations run automatically on boot, before the server accepts any traffic.
 
-**TLS in production.** Copy `privkey.pem` + `fullchain.pem` into the deployment's `ssl/` folder
-(or set `SSL_DIR`) and the API server serves HTTPS itself — no extra flags. If a load balancer
+**TLS in production.** Point `SSL_KEY_PATH` and `SSL_CERT_PATH` at the deployment's key and
+chain — absolute paths such as `/etc/letsencrypt/live/YOUR-DOMAIN/privkey.pem` are fine — and
+the API server serves HTTPS itself, no extra flags. If a load balancer
 or reverse proxy already terminates TLS, set `ENABLE_HTTPS=false` so the app speaks plain HTTP
 behind it, and make sure the proxy sets `X-Forwarded-Proto` so login cookies still get `Secure`.
 
@@ -530,7 +545,7 @@ behind NAT — the dashboard's `/api` proxy dials the wrong host and every page 
 - [ ] Set a real, random `PROVIDER_KEY_SECRET` — otherwise stored AI keys use a known dev seed
 - [ ] Set `NODE_ENV=production` so login cookies become `secure` + `sameSite: strict` (the `secure` flag is also set automatically whenever HTTPS is on)
 - [ ] Set `FRONTEND_URL` — without it, CORS reflects *any* origin, which is a dev-only default
-- [ ] Keep `ssl/privkey.pem` out of git (the `ssl/` folder is already in `.gitignore`) and re-check it after every certificate renewal
+- [ ] Keep the file at `SSL_KEY_PATH` out of git (the repo's `ssl/` folder is already in `.gitignore`) and re-check it after every certificate renewal
 - [ ] Rotate the default webhook secret (`voxagent-webhook-secret-default`) used to accept incoming call events
 - [ ] Never commit your `.env` file
 # omni-channel-bot

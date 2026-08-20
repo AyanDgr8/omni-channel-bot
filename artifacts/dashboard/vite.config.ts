@@ -28,24 +28,54 @@ if (!basePath) {
 }
 
 // ── TLS ───────────────────────────────────────────────────────────────────────
-// Certificates come from the workspace-root `ssl/` folder and nowhere else
-// (override the location with SSL_DIR; the file names stay Let's Encrypt's).
-// Set ENABLE_HTTPS=false to serve plain HTTP even when they are present.
-const sslDir = path.resolve(
-  process.env.SSL_DIR ?? path.resolve(import.meta.dirname, "..", "..", "ssl"),
-);
+// Same contract as the API server's lib/ssl.ts — keep the two in step:
+//   1. SSL_KEY_PATH + SSL_CERT_PATH — explicit files (the normal case)
+//   2. SSL_DIR                      — a folder holding Let's Encrypt's filenames
+//   3. <workspace root>/ssl         — the repo's own certificates
+// Relative paths resolve against the workspace root, because `pnpm --filter`
+// starts this process in artifacts/dashboard rather than at the root.
+// Set ENABLE_HTTPS=false to serve plain HTTP even when certificates are present.
+const workspaceRoot = path.resolve(import.meta.dirname, "..", "..");
+
+const resolveFromRoot = (p: string) =>
+  path.isAbsolute(p) ? p : path.resolve(workspaceRoot, p);
+
+function resolveTlsPaths() {
+  const { SSL_KEY_PATH: keyEnv, SSL_CERT_PATH: certEnv, SSL_DIR } = process.env;
+
+  if (keyEnv || certEnv) {
+    if (!keyEnv || !certEnv) {
+      throw new Error(
+        `SSL_KEY_PATH and SSL_CERT_PATH must be set together — got only ${keyEnv ? "SSL_KEY_PATH" : "SSL_CERT_PATH"}.`,
+      );
+    }
+    return { keyPath: resolveFromRoot(keyEnv), certPath: resolveFromRoot(certEnv) };
+  }
+
+  const dir = SSL_DIR ? resolveFromRoot(SSL_DIR) : path.join(workspaceRoot, "ssl");
+  const certPath = ["fullchain.pem", "cert.pem"]
+    .map((f) => path.join(dir, f))
+    .find((f) => fs.existsSync(f));
+
+  return { keyPath: path.join(dir, "privkey.pem"), certPath: certPath ?? null };
+}
 
 function loadHttpsConfig() {
   if (process.env.ENABLE_HTTPS === "false" || process.env.ENABLE_HTTPS === "0") {
     return undefined;
   }
 
-  const keyPath = path.join(sslDir, "privkey.pem");
-  const certPath = ["fullchain.pem", "cert.pem"]
-    .map((f) => path.join(sslDir, f))
-    .find((f) => fs.existsSync(f));
+  const { keyPath, certPath } = resolveTlsPaths();
+  const keyExists = fs.existsSync(keyPath);
 
-  if (!fs.existsSync(keyPath) || !certPath) return undefined;
+  if (!keyExists || !certPath) {
+    // A typo in SSL_KEY_PATH must fail loudly rather than silently downgrade to
+    // plain HTTP; an absent default ssl/ folder just means "no TLS configured".
+    if (!process.env.SSL_KEY_PATH && !keyExists) return undefined;
+    throw new Error(
+      `TLS is configured but unreadable — missing ${!keyExists ? keyPath : "certificate"}`,
+    );
+  }
 
   return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
 }

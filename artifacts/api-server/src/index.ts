@@ -31,11 +31,14 @@ function createServer(): { server: http.Server; protocol: "http" | "https" } {
 
   if (!tls) {
     throw new Error(
-      "ENABLE_HTTPS is set but no TLS material was found — expected privkey.pem + fullchain.pem in the workspace ssl/ folder (or SSL_DIR).",
+      "ENABLE_HTTPS is set but no TLS material was found — point SSL_KEY_PATH and SSL_CERT_PATH at your key and certificate chain.",
     );
   }
 
-  logger.info({ sslDir: tls.dir }, "Loaded TLS certificate");
+  logger.info(
+    { keyPath: tls.keyPath, certPath: tls.certPath },
+    "Loaded TLS certificate",
+  );
   return {
     server: https.createServer({ key: tls.key, cert: tls.cert }, app),
     protocol: "https",
