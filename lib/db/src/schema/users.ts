@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, text, timestamp } from "drizzle-orm/mysql-core";
 import { tenantsTable } from "./tenants";
 
 /** Role hierarchy (ascending privilege): ANALYST < SUPERVISOR < ADMIN < OWNER */
@@ -12,18 +12,18 @@ export const ROLE_RANK: Record<UserRole, number> = {
   OWNER: 4,
 };
 
-export const usersTable = pgTable("users", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  tenantId: text("tenant_id")
+export const usersTable = mysqlTable("users", {
+  id: varchar("id", { length: 64 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  tenantId: varchar("tenant_id", { length: 64 })
     .notNull()
     .references(() => tenantsTable.id, { onDelete: "cascade" }),
-  email: text("email").notNull().unique(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   /** OWNER | ADMIN | SUPERVISOR | ANALYST */
-  role: text("role").$type<UserRole>().notNull().default("ANALYST"),
+  role: varchar("role", { length: 32 }).$type<UserRole>().notNull().default("ANALYST"),
   /** active | inactive */
-  status: text("status").notNull().default("active"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  status: varchar("status", { length: 32 }).notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type User = typeof usersTable.$inferSelect;

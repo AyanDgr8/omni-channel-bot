@@ -12,6 +12,7 @@ import {
   UpdateLlmConfigBody,
   UpdateLlmConfigResponse,
 } from "@workspace/api-zod";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role";
 import { auditMiddleware } from "../middleware/audit";
 import { randomUUID } from "crypto";
@@ -29,10 +30,9 @@ async function ensurePersonaConfig(tenantId: string) {
     .where(eq(personaConfigTable.tenantId, tenantId))
     .limit(1);
   if (!config) {
-    [config] = await db
-      .insert(personaConfigTable)
-      .values({ id: randomUUID(), tenantId })
-      .returning();
+    const id = randomUUID();
+    await db.insert(personaConfigTable).values({ id, tenantId });
+    config = (await selectOne(personaConfigTable, eq(personaConfigTable.id, id)))!;
   }
   return config;
 }
@@ -44,10 +44,9 @@ async function ensureConversationConfig(tenantId: string) {
     .where(eq(conversationConfigTable.tenantId, tenantId))
     .limit(1);
   if (!config) {
-    [config] = await db
-      .insert(conversationConfigTable)
-      .values({ id: randomUUID(), tenantId })
-      .returning();
+    const id = randomUUID();
+    await db.insert(conversationConfigTable).values({ id, tenantId });
+    config = (await selectOne(conversationConfigTable, eq(conversationConfigTable.id, id)))!;
   }
   return config;
 }
@@ -59,10 +58,9 @@ async function ensureLlmConfig(tenantId: string) {
     .where(eq(llmConfigTable.tenantId, tenantId))
     .limit(1);
   if (!config) {
-    [config] = await db
-      .insert(llmConfigTable)
-      .values({ id: randomUUID(), tenantId })
-      .returning();
+    const id = randomUUID();
+    await db.insert(llmConfigTable).values({ id, tenantId });
+    config = (await selectOne(llmConfigTable, eq(llmConfigTable.id, id)))!;
   }
   return config;
 }
@@ -79,11 +77,11 @@ router.put("/v1/config/persona", requireRole("ADMIN"), auditMiddleware("config")
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const existing = await ensurePersonaConfig(req.tenantId!);
-  const [config] = await db
+  await db
     .update(personaConfigTable)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(personaConfigTable.id, existing.id))
-    .returning();
+    .where(eq(personaConfigTable.id, existing.id));
+  const config = await selectOne(personaConfigTable, eq(personaConfigTable.id, existing.id));
   res.json(UpdatePersonaConfigResponse.parse(config));
 });
 
@@ -99,11 +97,11 @@ router.put("/v1/config/conversation", requireRole("ADMIN"), auditMiddleware("con
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const existing = await ensureConversationConfig(req.tenantId!);
-  const [config] = await db
+  await db
     .update(conversationConfigTable)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(conversationConfigTable.id, existing.id))
-    .returning();
+    .where(eq(conversationConfigTable.id, existing.id));
+  const config = await selectOne(conversationConfigTable, eq(conversationConfigTable.id, existing.id));
   res.json(UpdateConversationConfigResponse.parse(config));
 });
 
@@ -119,11 +117,11 @@ router.put("/v1/config/llm", requireRole("ADMIN"), auditMiddleware("config"), as
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const existing = await ensureLlmConfig(req.tenantId!);
-  const [config] = await db
+  await db
     .update(llmConfigTable)
     .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(llmConfigTable.id, existing.id))
-    .returning();
+    .where(eq(llmConfigTable.id, existing.id));
+  const config = await selectOne(llmConfigTable, eq(llmConfigTable.id, existing.id));
   res.json(UpdateLlmConfigResponse.parse(config));
 });
 

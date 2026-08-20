@@ -1,18 +1,18 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, timestamp } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const messageLogsTable = pgTable("message_logs", {
-  id: text("id").primaryKey(),
-  channel: text("channel").notNull(),
-  recipient: text("recipient").notNull(),
-  templateName: text("template_name"),
-  messageId: text("message_id"),
-  status: text("status").notNull().default("sent"),
-  callId: text("call_id"),
+export const messageLogsTable = mysqlTable("message_logs", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  channel: varchar("channel", { length: 32 }).notNull(),
+  recipient: varchar("recipient", { length: 255 }).notNull(),
+  templateName: varchar("template_name", { length: 255 }),
+  messageId: varchar("message_id", { length: 128 }),
+  status: varchar("status", { length: 32 }).notNull().default("sent"),
+  callId: varchar("call_id", { length: 64 }),
   /** VoxAgent organisation this message belongs to */
-  tenantId: text("tenant_id").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  tenantId: varchar("tenant_id", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertMessageLogSchema = createInsertSchema(messageLogsTable).omit({ createdAt: true });

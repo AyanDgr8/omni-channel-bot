@@ -100,7 +100,7 @@ Give any organisation the ability to deploy a human-quality AI telephone agent i
 └───────────────────────────┬─────────────────────────────┘
                             │  Drizzle ORM
 ┌───────────────────────────▼─────────────────────────────┐
-│                  PostgreSQL Database                     │
+│                     MySQL Database                       │
 │  Tables: calls · bots · personas · persona_traits       │
 │          persona_config · conversation_config · llm_config│
 │          flow_configs · memory_entries · message_logs   │

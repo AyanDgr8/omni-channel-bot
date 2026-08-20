@@ -1,4 +1,4 @@
-import { pgTable, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, int, json, timestamp } from "drizzle-orm/mysql-core";
 import { personasTable } from "./personas";
 
 export interface PersonaTraitsJson {
@@ -36,16 +36,16 @@ export interface PersonaTraitsJson {
   };
 }
 
-export const personaTraitsTable = pgTable("persona_traits", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  personaId: text("persona_id")
+export const personaTraitsTable = mysqlTable("persona_traits", {
+  id: varchar("id", { length: 64 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  personaId: varchar("persona_id", { length: 64 })
     .notNull()
     .references(() => personasTable.id, { onDelete: "cascade" }),
-  version: integer("version").notNull().default(1),
-  traits: jsonb("traits").notNull().$type<PersonaTraitsJson>(),
-  generatedByModel: text("generated_by_model"),
+  version: int("version").notNull().default(1),
+  traits: json("traits").notNull().$type<PersonaTraitsJson>(),
+  generatedByModel: varchar("generated_by_model", { length: 128 }),
   /** Denormalised from parent persona for fast tenant filtering */
-  tenantId: text("tenant_id").notNull(),
+  tenantId: varchar("tenant_id", { length: 64 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

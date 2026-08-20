@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, text, int, timestamp } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -7,35 +7,35 @@ import { z } from "zod/v4";
  * Written by the ProviderRegistry on every callLlm() attempt (success or failure).
  * Used for latency monitoring, cost estimation, and circuit-breaker forensics.
  */
-export const providerCallLogTable = pgTable("provider_call_log", {
-  id: text("id").primaryKey(),
+export const providerCallLogTable = mysqlTable("provider_call_log", {
+  id: varchar("id", { length: 64 }).primaryKey(),
 
-  tenantId: text("tenant_id").notNull(),
+  tenantId: varchar("tenant_id", { length: 64 }).notNull(),
 
   /** FK to providers.id — null if called via legacy env-var path */
-  providerId: text("provider_id"),
+  providerId: varchar("provider_id", { length: 64 }),
 
   /** FK to calls.id — null when called outside a live call (e.g. persona generation) */
-  callId: text("call_id"),
+  callId: varchar("call_id", { length: 64 }),
 
-  providerVendor: text("provider_vendor").notNull(),
+  providerVendor: varchar("provider_vendor", { length: 64 }).notNull(),
 
   /** LLM | STT | TTS */
-  providerKind: text("provider_kind").notNull(),
+  providerKind: varchar("provider_kind", { length: 16 }).notNull(),
 
-  modelId: text("model_id").notNull(),
+  modelId: varchar("model_id", { length: 128 }).notNull(),
 
   /** success | error | timeout | breaker_open */
-  outcomeStatus: text("outcome_status").notNull(),
+  outcomeStatus: varchar("outcome_status", { length: 32 }).notNull(),
 
   /** Wall-clock ms from sending the request to receiving the first response byte */
-  latencyMs: integer("latency_ms").notNull(),
+  latencyMs: int("latency_ms").notNull(),
 
-  inputTokens: integer("input_tokens"),
-  outputTokens: integer("output_tokens"),
+  inputTokens: int("input_tokens"),
+  outputTokens: int("output_tokens"),
   errorMessage: text("error_message"),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertProviderCallLogSchema = createInsertSchema(providerCallLogTable).omit({ createdAt: true });

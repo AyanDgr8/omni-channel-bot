@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, or, and } from "drizzle-orm";
+import { eq, like, or, and } from "drizzle-orm";
 import { db, memoryEntriesTable } from "@workspace/db";
 import {
   ListMemoryEntriesResponse,
@@ -13,6 +13,7 @@ import {
   ListMemoryEntriesQueryParams,
 } from "@workspace/api-zod";
 import { randomUUID } from "crypto";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role.js";
 
 const router: IRouter = Router();
@@ -25,7 +26,9 @@ router.get("/v1/memory/entries", async (req, res): Promise<void> => {
 
   const tenantFilter = eq(memoryEntriesTable.tenantId, req.tenantId!);
   const searchFilter = search
-    ? or(ilike(memoryEntriesTable.question, `%${search}%`), ilike(memoryEntriesTable.answer, `%${search}%`))
+    // MySQL LIKE is case-insensitive under the default utf8mb4_0900_ai_ci
+    // collation, so it matches the old Postgres ILIKE behaviour.
+    ? or(like(memoryEntriesTable.question, `%${search}%`), like(memoryEntriesTable.answer, `%${search}%`))
     : undefined;
 
   const whereCondition = searchFilter ? and(tenantFilter, searchFilter) : tenantFilter;
@@ -45,18 +48,17 @@ router.post("/v1/memory/entries", requireRole("ANALYST"), async (req, res): Prom
   const parsed = CreateMemoryEntryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [entry] = await db
-    .insert(memoryEntriesTable)
-    .values({
-      id: randomUUID(),
-      question: parsed.data.question,
-      answer: parsed.data.answer,
-      confidence: parsed.data.confidence ?? 1.0,
-      hitCount: 0,
-      tier: "L3",
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  const id = randomUUID();
+  await db.insert(memoryEntriesTable).values({
+    id,
+    question: parsed.data.question,
+    answer: parsed.data.answer,
+    confidence: parsed.data.confidence ?? 1.0,
+    hitCount: 0,
+    tier: "L3",
+    tenantId: req.tenantId!,
+  });
+  const entry = await selectOne(memoryEntriesTable, eq(memoryEntriesTable.id, id));
   res.status(201).json(entry);
 });
 
@@ -66,11 +68,9 @@ router.put("/v1/memory/entries/:id", requireRole("ANALYST"), async (req, res): P
   const parsed = UpdateMemoryEntryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [entry] = await db
-    .update(memoryEntriesTable)
-    .set(parsed.data)
-    .where(and(eq(memoryEntriesTable.id, params.data.id), eq(memoryEntriesTable.tenantId, req.tenantId!)))
-    .returning();
+  const scope = and(eq(memoryEntriesTable.id, params.data.id), eq(memoryEntriesTable.tenantId, req.tenantId!));
+  await db.update(memoryEntriesTable).set(parsed.data).where(scope);
+  const entry = await selectOne(memoryEntriesTable, scope);
   if (!entry) { res.status(404).json({ error: "Memory entry not found" }); return; }
   res.json(UpdateMemoryEntryResponse.parse(entry));
 });
@@ -79,10 +79,10 @@ router.delete("/v1/memory/entries/:id", requireRole("ANALYST"), async (req, res)
   const params = DeleteMemoryEntryParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const [entry] = await db
-    .delete(memoryEntriesTable)
-    .where(and(eq(memoryEntriesTable.id, params.data.id), eq(memoryEntriesTable.tenantId, req.tenantId!)))
-    .returning();
+  // MySQL has no DELETE ... RETURNING — read the row first, then remove it.
+  const scope = and(eq(memoryEntriesTable.id, params.data.id), eq(memoryEntriesTable.tenantId, req.tenantId!));
+  const entry = await selectOne(memoryEntriesTable, scope);
+  if (entry) await db.delete(memoryEntriesTable).where(scope);
   if (!entry) { res.status(404).json({ error: "Memory entry not found" }); return; }
   res.sendStatus(204);
 });

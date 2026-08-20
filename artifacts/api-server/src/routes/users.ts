@@ -7,6 +7,7 @@
  */
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import { eq, and } from "drizzle-orm";
 import { db, usersTable, USER_ROLES } from "@workspace/db";
 import { requireRole } from "../middleware/require-role.js";
@@ -14,6 +15,18 @@ import { auditMiddleware } from "../middleware/audit.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
+
+/**
+ * Columns safe to return to clients — deliberately omits `password_hash`.
+ * MySQL has no RETURNING clause, so writes re-select this projection.
+ */
+const PUBLIC_USER_COLUMNS = {
+  id: usersTable.id,
+  email: usersTable.email,
+  role: usersTable.role,
+  status: usersTable.status,
+  createdAt: usersTable.createdAt,
+};
 
 // All user-management endpoints require OWNER
 router.use("/v1/users", requireRole("OWNER"));
@@ -92,24 +105,22 @@ router.post("/v1/users", async (req, res): Promise<void> => {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
+  const id = randomUUID();
+  await db.insert(usersTable).values({
+    id,
+    tenantId: req.tenantId!,
+    email: email.toLowerCase().trim(),
+    passwordHash,
+    role: role as typeof USER_ROLES[number],
+    status: "active",
+  });
   const [user] = await db
-    .insert(usersTable)
-    .values({
-      tenantId: req.tenantId!,
-      email: email.toLowerCase().trim(),
-      passwordHash,
-      role: role as typeof USER_ROLES[number],
-      status: "active",
-    })
-    .returning({
-      id: usersTable.id,
-      email: usersTable.email,
-      role: usersTable.role,
-      status: usersTable.status,
-      createdAt: usersTable.createdAt,
-    });
+    .select(PUBLIC_USER_COLUMNS)
+    .from(usersTable)
+    .where(eq(usersTable.id, id))
+    .limit(1);
 
-  logger.info({ userId: user.id, tenantId: req.tenantId }, "User created");
+  logger.info({ userId: id, tenantId: req.tenantId }, "User created");
 
   res.status(201).json(user);
 });
@@ -147,17 +158,9 @@ router.patch("/v1/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set(updates)
-    .where(and(eq(usersTable.id, req.params.id), eq(usersTable.tenantId, req.tenantId!)))
-    .returning({
-      id: usersTable.id,
-      email: usersTable.email,
-      role: usersTable.role,
-      status: usersTable.status,
-      createdAt: usersTable.createdAt,
-    });
+  const scope = and(eq(usersTable.id, req.params.id), eq(usersTable.tenantId, req.tenantId!));
+  await db.update(usersTable).set(updates).where(scope);
+  const [user] = await db.select(PUBLIC_USER_COLUMNS).from(usersTable).where(scope).limit(1);
 
   if (!user) {
     res.status(404).json({ error: "User not found" });

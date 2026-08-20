@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "crypto";
 import { eq, and, desc } from "drizzle-orm";
 import { db, personasTable, personaTraitsTable, llmConfigTable } from "@workspace/db";
 import type { PersonaTraitsJson } from "@workspace/db";
 import { resolvePersonaTraits, refinePersonaTraits, TraitsSchema } from "../lib/persona-service";
 import { composeSystemPrompt, extractVoiceSettings, validatePersonaForVoiceBot } from "../lib/persona-composer";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role";
 import { auditMiddleware } from "../middleware/audit";
 import { logger } from "../lib/logger";
@@ -78,10 +80,11 @@ router.post("/v1/personas", requireRole("ADMIN"), auditMiddleware("persona"), as
     return;
   }
 
-  const [persona] = await db
+  const personaId = randomUUID();
+  await db
     .insert(personasTable)
-    .values({ name: name.trim(), description, source: "llm_generated", version: 1, tenantId: req.tenantId! })
-    .returning();
+    .values({ id: personaId, name: name.trim(), description, source: "llm_generated", version: 1, tenantId: req.tenantId! });
+  const persona = (await selectOne(personasTable, eq(personasTable.id, personaId)))!;
 
   try {
     const { traits, model } = await resolvePersonaTraits(persona.id, persona.name, req.tenantId!, persona.description, false);
@@ -130,11 +133,9 @@ router.post("/v1/personas/:id/activate", requireRole("ADMIN"), auditMiddleware("
     .set({ isActive: false })
     .where(eq(personasTable.tenantId, req.tenantId!));
 
-  const [updated] = await db
-    .update(personasTable)
-    .set({ isActive: true, updatedAt: new Date() })
-    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)))
-    .returning();
+  const scope = and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!));
+  await db.update(personasTable).set({ isActive: true, updatedAt: new Date() }).where(scope);
+  const updated = await selectOne(personasTable, scope);
   res.json(updated);
 });
 
@@ -165,11 +166,9 @@ router.put("/v1/personas/:id/traits", requireRole("ADMIN"), auditMiddleware("per
     tenantId: req.tenantId!,
   });
 
-  const [updated] = await db
-    .update(personasTable)
-    .set({ source: "manual", version: newVersion, updatedAt: new Date() })
-    .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)))
-    .returning();
+  const scope = and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!));
+  await db.update(personasTable).set({ source: "manual", version: newVersion, updatedAt: new Date() }).where(scope);
+  const updated = await selectOne(personasTable, scope);
 
   res.json({ ...updated, traits });
 });
@@ -194,11 +193,12 @@ router.post("/v1/personas/:id/regenerate", requireRole("ADMIN"), async (req, res
       generatedByModel: model,
       tenantId: req.tenantId!,
     });
-    const [updated] = await db
+    const scope = and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!));
+    await db
       .update(personasTable)
       .set({ source: "llm_generated", version: newVersion, updatedAt: new Date() })
-      .where(and(eq(personasTable.id, id), eq(personasTable.tenantId, req.tenantId!)))
-      .returning();
+      .where(scope);
+    const updated = await selectOne(personasTable, scope);
     res.json({ ...updated, traits, generatedByModel: model });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -294,17 +294,17 @@ router.post("/v1/personas/:id/duplicate", requireRole("ADMIN"), async (req, res)
   const data = await getPersonaWithTraits(req.params.id as string, req.tenantId!);
   if (!data) { res.status(404).json({ error: "Persona not found" }); return; }
 
-  const [newPersona] = await db
-    .insert(personasTable)
-    .values({
-      name: `${data.name} (Copy)`,
-      description: data.description,
-      source: data.source,
-      version: 1,
-      isActive: false,
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  const newPersonaId = randomUUID();
+  await db.insert(personasTable).values({
+    id: newPersonaId,
+    name: `${data.name} (Copy)`,
+    description: data.description,
+    source: data.source,
+    version: 1,
+    isActive: false,
+    tenantId: req.tenantId!,
+  });
+  const newPersona = (await selectOne(personasTable, eq(personasTable.id, newPersonaId)))!;
 
   if (data.traits) {
     await db.insert(personaTraitsTable).values({

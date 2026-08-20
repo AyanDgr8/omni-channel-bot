@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, text, boolean, timestamp, json } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -6,14 +6,14 @@ import { z } from "zod/v4";
  * Registered provider instances per tenant (or platform-pooled when tenant_id IS NULL).
  * One row = one credential+endpoint pair that bots can reference in their engine chains.
  */
-export const providersTable = pgTable("providers", {
-  id: text("id").primaryKey(),
+export const providersTable = mysqlTable("providers", {
+  id: varchar("id", { length: 64 }).primaryKey(),
 
   /** NULL = platform-pooled (shared across all tenants as last-resort fallback) */
-  tenantId: text("tenant_id"),
+  tenantId: varchar("tenant_id", { length: 64 }),
 
   /** LLM | STT | TTS */
-  kind: text("kind").notNull(),
+  kind: varchar("kind", { length: 16 }).notNull(),
 
   /**
    * Vendor slug — must match a vendor value in model_catalog.
@@ -21,26 +21,26 @@ export const providersTable = pgTable("providers", {
    * STT: deepgram | elevenlabs | google | sarvam | whisper-compatible
    * TTS: elevenlabs | google | deepgram-aura | cartesia | sarvam | azure
    */
-  vendor: text("vendor").notNull(),
+  vendor: varchar("vendor", { length: 64 }).notNull(),
 
-  displayName: text("display_name").notNull(),
+  displayName: varchar("display_name", { length: 255 }).notNull(),
 
   /** Custom base URL — required for openai-compatible / whisper-compatible vendors */
   baseUrl: text("base_url"),
 
   /** bearer | api-key | none */
-  authMode: text("auth_mode").notNull().default("bearer"),
+  authMode: varchar("auth_mode", { length: 16 }).notNull().default("bearer"),
 
   /** AES-256-GCM ciphertext of the raw API key — never returned to clients */
   apiKeyEncrypted: text("api_key_encrypted"),
 
   /** Extra vendor-specific options (e.g. Deepgram diarization, Sarvam language hints) */
-  configJson: jsonb("config_json"),
+  configJson: json("config_json"),
 
   enabled: boolean("enabled").notNull().default(true),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertProviderSchema = createInsertSchema(providersTable).omit({ createdAt: true, updatedAt: true });

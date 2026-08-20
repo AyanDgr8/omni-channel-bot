@@ -5,7 +5,11 @@
  * Usage: pnpm --filter @workspace/scripts run seed-personas
  */
 import { db, pool, personasTable, personaTraitsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
+
+/** Seeded by migration 0001 — the organisation library personas belong to. */
+const DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 
 interface PersonaTraits {
   identity: {
@@ -238,25 +242,31 @@ async function main(): Promise<void> {
     const existing = await db
       .select({ id: personasTable.id })
       .from(personasTable)
-      .where(eq(personasTable.name, p.name));
+      .where(and(eq(personasTable.name, p.name), eq(personasTable.tenantId, DEFAULT_TENANT_ID)));
 
     if (existing.length > 0) {
       console.log(`  ✓ ${p.name} — already exists, skipping`);
       continue;
     }
 
-    const [persona] = await db
-      .insert(personasTable)
-      .values({ name: p.name, description: p.description, source: "library", isActive: false, version: 1 })
-      .returning({ id: personasTable.id });
-
-    if (!persona) throw new Error(`Failed to insert persona: ${p.name}`);
+    // MySQL has no INSERT ... RETURNING, so generate the id up front.
+    const personaId = randomUUID();
+    await db.insert(personasTable).values({
+      id: personaId,
+      name: p.name,
+      description: p.description,
+      source: "library",
+      isActive: false,
+      version: 1,
+      tenantId: DEFAULT_TENANT_ID,
+    });
 
     await db.insert(personaTraitsTable).values({
-      personaId: persona.id,
+      personaId,
       version: 1,
       traits: p.traits,
       generatedByModel: null,
+      tenantId: DEFAULT_TENANT_ID,
     });
 
     console.log(`  ✓ ${p.name} seeded`);

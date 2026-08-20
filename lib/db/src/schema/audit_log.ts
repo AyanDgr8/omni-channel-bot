@@ -1,22 +1,22 @@
-import { pgTable, text, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, text, json, timestamp } from "drizzle-orm/mysql-core";
 
 /**
  * Immutable audit trail. Written by middleware on every mutating request
  * that touches personas, bots, configs, or users.
  */
-export const auditLogTable = pgTable("audit_log", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  tenantId: text("tenant_id").notNull(),
-  actorUserId: text("actor_user_id"),
+export const auditLogTable = mysqlTable("audit_log", {
+  id: varchar("id", { length: 64 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  tenantId: varchar("tenant_id", { length: 64 }).notNull(),
+  actorUserId: varchar("actor_user_id", { length: 64 }),
   /** CREATE | UPDATE | DELETE */
-  action: text("action").notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
   /** persona | bot | config | user | flow | memory */
-  entity: text("entity").notNull(),
-  entityId: text("entity_id"),
-  beforeJson: jsonb("before_json"),
-  afterJson: jsonb("after_json"),
+  entity: varchar("entity", { length: 64 }).notNull(),
+  entityId: varchar("entity_id", { length: 64 }),
+  beforeJson: json("before_json"),
+  afterJson: json("after_json"),
   ip: text("ip"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type AuditLog = typeof auditLogTable.$inferSelect;

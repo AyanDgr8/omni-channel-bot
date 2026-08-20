@@ -13,6 +13,7 @@ import {
 import { randomUUID } from "crypto";
 import { desc } from "drizzle-orm";
 import { validatePersonaForVoiceBot } from "../lib/persona-composer";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role";
 import { auditMiddleware } from "../middleware/audit";
 import type { LlmChainEntry, SttMapEntry, TtsMapEntry } from "../lib/provider-registry";
@@ -160,16 +161,15 @@ router.post("/v1/bots", requireRole("ADMIN"), auditMiddleware("bot"), async (req
     return;
   }
 
-  const [bot] = await db
-    .insert(botsTable)
-    .values({
-      id: randomUUID(),
-      ...parsed.data,
-      status: "OFFLINE",
-      activeCalls: 0,
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  const id = randomUUID();
+  await db.insert(botsTable).values({
+    id,
+    ...parsed.data,
+    status: "OFFLINE",
+    activeCalls: 0,
+    tenantId: req.tenantId!,
+  });
+  const bot = await selectOne(botsTable, eq(botsTable.id, id));
   res.status(201).json(GetBotResponse.parse(bot));
 });
 
@@ -215,11 +215,9 @@ router.patch("/v1/bots/:id", requireRole("ADMIN"), auditMiddleware("bot"), async
     }
   }
 
-  const [bot] = await db
-    .update(botsTable)
-    .set(parsed.data)
-    .where(and(eq(botsTable.id, params.data.id), eq(botsTable.tenantId, req.tenantId!)))
-    .returning();
+  const scope = and(eq(botsTable.id, params.data.id), eq(botsTable.tenantId, req.tenantId!));
+  await db.update(botsTable).set(parsed.data).where(scope);
+  const bot = await selectOne(botsTable, scope);
   if (!bot) { res.status(404).json({ error: "Bot not found" }); return; }
   res.json(GetBotResponse.parse(bot));
 });
@@ -230,10 +228,10 @@ router.delete("/v1/bots/:id", requireRole("ADMIN"), auditMiddleware("bot"), asyn
   const params = DeleteBotParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const [bot] = await db
-    .delete(botsTable)
-    .where(and(eq(botsTable.id, params.data.id), eq(botsTable.tenantId, req.tenantId!)))
-    .returning();
+  // MySQL has no DELETE ... RETURNING — read the row first, then remove it.
+  const scope = and(eq(botsTable.id, params.data.id), eq(botsTable.tenantId, req.tenantId!));
+  const bot = await selectOne(botsTable, scope);
+  if (bot) await db.delete(botsTable).where(scope);
   if (!bot) { res.status(404).json({ error: "Bot not found" }); return; }
   res.sendStatus(204);
 });
@@ -287,11 +285,9 @@ router.post(
     }
 
     // 5. Assign
-    const [updatedBot] = await db
-      .update(botsTable)
-      .set({ activePersonaId: personaId })
-      .where(and(eq(botsTable.id, botId), eq(botsTable.tenantId, req.tenantId!)))
-      .returning();
+    const scope = and(eq(botsTable.id, botId), eq(botsTable.tenantId, req.tenantId!));
+    await db.update(botsTable).set({ activePersonaId: personaId }).where(scope);
+    const updatedBot = await selectOne(botsTable, scope);
 
     // 6. Update personas.is_active for UI convenience (Option A)
     await db
@@ -317,11 +313,9 @@ router.delete(
       .where(and(eq(botsTable.id, botId), eq(botsTable.tenantId, req.tenantId!)));
     if (!bot) { res.status(404).json({ error: "Bot not found" }); return; }
 
-    const [updatedBot] = await db
-      .update(botsTable)
-      .set({ activePersonaId: null })
-      .where(and(eq(botsTable.id, botId), eq(botsTable.tenantId, req.tenantId!)))
-      .returning();
+    const scope = and(eq(botsTable.id, botId), eq(botsTable.tenantId, req.tenantId!));
+    await db.update(botsTable).set({ activePersonaId: null }).where(scope);
+    const updatedBot = await selectOne(botsTable, scope);
 
     res.json({ bot: updatedBot, assigned: false });
   }

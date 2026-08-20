@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, emailAgentConfigTable, writingStyleProfilesTable } from "@workspace/db";
+import { selectOne } from "../lib/db-returning.js";
 import { randomUUID } from "crypto";
 
 const router: IRouter = Router();
@@ -87,10 +88,9 @@ async function ensureStyleProfile(voxTenantId: string) {
     .where(eq(writingStyleProfilesTable.tenantId, voxTenantId))
     .limit(1);
   if (!row) {
-    [row] = await db
-      .insert(writingStyleProfilesTable)
-      .values({ id: randomUUID(), tenantId: voxTenantId })
-      .returning();
+    const id = randomUUID();
+    await db.insert(writingStyleProfilesTable).values({ id, tenantId: voxTenantId });
+    row = (await selectOne(writingStyleProfilesTable, eq(writingStyleProfilesTable.id, id)))!;
   }
   return row;
 }

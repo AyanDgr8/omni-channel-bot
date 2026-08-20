@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, timestamp } from "drizzle-orm/mysql-core";
 import { tenantsTable } from "./tenants";
 
 /**
@@ -6,14 +6,14 @@ import { tenantsTable } from "./tenants";
  * Used by POST /v1/calls/receive to resolve the tenant from the called number
  * and validate the webhook secret.
  */
-export const tenantDidsTable = pgTable("tenant_dids", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  tenantId: text("tenant_id")
+export const tenantDidsTable = mysqlTable("tenant_dids", {
+  id: varchar("id", { length: 64 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  tenantId: varchar("tenant_id", { length: 64 })
     .notNull()
     .references(() => tenantsTable.id, { onDelete: "cascade" }),
   /** E.164 format, e.g. +14155552671 — globally unique across all tenants */
-  didE164: text("did_e164").notNull().unique(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  didE164: varchar("did_e164", { length: 32 }).notNull().unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type TenantDid = typeof tenantDidsTable.$inferSelect;

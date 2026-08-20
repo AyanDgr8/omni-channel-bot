@@ -19,8 +19,9 @@ import {
   botsTable,
   providersTable,
   providerCallLogTable,
+  llmConfigTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { ProviderRegistry } from "../lib/provider-registry";
 import { encryptKey } from "../lib/key-crypto";
 
@@ -59,20 +60,21 @@ beforeAll(async () => {
     status: "active",
     region: "global",
     webhookSecret: `fo-secret-${randomUUID()}`,
-  }).onConflictDoNothing();
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-  // Seed ADMIN user (needed for HTTP route authorization tests)
-  const [insertedUser] = await db.insert(usersTable).values({
+  // Seed ADMIN user (needed for HTTP route authorization tests).
+  // MySQL has no RETURNING, so the id is generated here rather than read back.
+  const adminUserId = randomUUID();
+  await db.insert(usersTable).values({
+    id: adminUserId,
     tenantId: T_ID,
     email: ADMIN_EMAIL,
     passwordHash: pwHash,
     role: "ADMIN",
     status: "active",
-  }).onConflictDoNothing().returning({ id: usersTable.id });
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
   // Track the generated ID for cleanup
-  if (insertedUser?.id) {
-    Object.assign(globalThis, { __fo_admin_user_id: insertedUser.id });
-  }
+  Object.assign(globalThis, { __fo_admin_user_id: adminUserId });
 
   adminCookie = await loginAdmin();
 
@@ -86,7 +88,7 @@ beforeAll(async () => {
     authMode: "bearer",
     apiKeyEncrypted: encryptKey(FAKE_KEY),
     enabled: true,
-  }).onConflictDoNothing();
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
   // Seed provider 2 (anthropic — will be mocked to succeed)
   await db.insert(providersTable).values({
@@ -98,7 +100,7 @@ beforeAll(async () => {
     authMode: "api-key",
     apiKeyEncrypted: encryptKey(FAKE_KEY),
     enabled: true,
-  }).onConflictDoNothing();
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
   // Seed bot with explicit two-provider chain
   await db.insert(botsTable).values({
@@ -119,7 +121,7 @@ beforeAll(async () => {
       { provider_id: P1_ID, model_id: "gpt-4o-mini" },
       { provider_id: P2_ID, model_id: "claude-3-haiku-20240307" },
     ],
-  }).onConflictDoNothing();
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 });
 
 afterAll(async () => {
@@ -324,7 +326,7 @@ describe("ProviderRegistry — SSRF protection at runtime", () => {
       authMode: "bearer",
       apiKeyEncrypted: encryptKey("ssrf-test-key"),
       enabled: true,
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     await db.insert(botsTable).values({
       id: BOT_SSRF,
@@ -341,7 +343,7 @@ describe("ProviderRegistry — SSRF protection at runtime", () => {
       silenceRecoverySecs: 6,
       direction: "inbound",
       llmChainJson: [{ provider_id: LOOPBACK_PROVIDER_ID, model_id: "custom-model" }],
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
   });
 
   afterAll(async () => {
@@ -560,18 +562,21 @@ describe("ProviderRegistry — Ollama via llm_config.primary", () => {
       status: "active",
       region: "global",
       webhookSecret: `fo-ollama-secret-${randomUUID()}`,
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-    // Insert llm_config selecting ollama as primary
-    await db.execute(
-      (await import("drizzle-orm/sql")).sql`
-        INSERT INTO llm_config (id, tenant_id, "primary", fallback_chain, timeout_ms, max_retries,
-          circuit_breaker_failure_threshold, circuit_breaker_recovery_timeout_sec, updated_at)
-        VALUES (${`lc-ollama-${randomUUID()}`}, ${OLLAMA_TENANT}, 'ollama', ARRAY['openai']::text[],
-          5000, 1, 5, 30, NOW())
-        ON CONFLICT DO NOTHING
-      `
-    );
+    // Insert llm_config selecting ollama as primary.
+    // Uses the ORM rather than raw SQL so it stays dialect-agnostic.
+    await db.insert(llmConfigTable).values({
+      id: `lc-ollama-${randomUUID()}`,
+      tenantId: OLLAMA_TENANT,
+      primary: "ollama",
+      fallbackChain: ["openai"],
+      timeoutMs: 5000,
+      maxRetries: 1,
+      circuitBreakerFailureThreshold: 5,
+      circuitBreakerRecoveryTimeoutSec: 30,
+      updatedAt: new Date(),
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     // Mock OLLAMA_API_URL env var and fetch
     const origEnv = process.env.OLLAMA_API_URL;
@@ -608,9 +613,10 @@ describe("ProviderRegistry — Ollama via llm_config.primary", () => {
       expect(ollamaCalls.length).toBeGreaterThan(0);
     } finally {
       process.env.OLLAMA_API_URL = origEnv;
-      await db.execute(
-        (await import("drizzle-orm/sql")).sql`DELETE FROM llm_config WHERE tenant_id = ${OLLAMA_TENANT}`
-      ).catch(() => {});
+      await db
+        .delete(llmConfigTable)
+        .where(eq(llmConfigTable.tenantId, OLLAMA_TENANT))
+        .catch(() => {});
       await db.delete(tenantsTable).where(eq(tenantsTable.id, OLLAMA_TENANT)).catch(() => {});
     }
   });
@@ -659,7 +665,7 @@ describe("Providers — platform-pooled provider credential protection", () => {
       authMode: "bearer",
       apiKeyEncrypted: encryptKey("platform-secret-api-key-12345678"),
       enabled: true,
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
   });
 
   afterAll(async () => {
@@ -703,7 +709,7 @@ describe("ProviderRegistry — cross-tenant isolation", () => {
       status: "active",
       region: "global",
       webhookSecret: `other-secret-${randomUUID()}`,
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     await db.insert(providersTable).values({
       id: P_OTHER,
@@ -714,7 +720,7 @@ describe("ProviderRegistry — cross-tenant isolation", () => {
       authMode: "bearer",
       apiKeyEncrypted: encryptKey("other-tenant-secret-key"),
       enabled: true,
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     // Bot belonging to T_ID whose llmChainJson references T_OTHER's provider
     await db.insert(botsTable).values({
@@ -735,7 +741,7 @@ describe("ProviderRegistry — cross-tenant isolation", () => {
       llmChainJson: [
         { provider_id: P_OTHER, model_id: "gpt-4o" },
       ],
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
   });
 
   afterAll(async () => {
@@ -771,7 +777,7 @@ describe("ProviderRegistry — cross-tenant isolation", () => {
       authMode: "bearer",
       apiKeyEncrypted: encryptKey("foreign-stt-key"),
       enabled: true,
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     // Bot in T_ID referencing foreign STT
     const BOT_STT = `fo-bstt-${randomUUID()}`;
@@ -790,7 +796,7 @@ describe("ProviderRegistry — cross-tenant isolation", () => {
       silenceRecoverySecs: 6,
       direction: "inbound",
       sttMapJson: { en: { provider_id: P_FOREIGN_STT, model_id: "nova-2" } },
-    }).onConflictDoNothing();
+    }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
     const registry = new ProviderRegistry();
     const result = await registry.resolveStt(T_ID, "en", BOT_STT);

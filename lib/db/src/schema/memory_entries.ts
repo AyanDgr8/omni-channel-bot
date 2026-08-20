@@ -1,18 +1,18 @@
-import { pgTable, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, text, int, real, timestamp, datetime } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const memoryEntriesTable = pgTable("memory_entries", {
-  id: text("id").primaryKey(),
+export const memoryEntriesTable = mysqlTable("memory_entries", {
+  id: varchar("id", { length: 64 }).primaryKey(),
   question: text("question").notNull(),
   answer: text("answer").notNull(),
-  hitCount: integer("hit_count").notNull().default(0),
+  hitCount: int("hit_count").notNull().default(0),
   confidence: real("confidence").notNull().default(1.0),
-  tier: text("tier").notNull().default("L3"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  lastHitAt: timestamp("last_hit_at", { withTimezone: true }),
+  tier: varchar("tier", { length: 8 }).notNull().default("L3"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastHitAt: datetime("last_hit_at"),
   /** VoxAgent organisation this memory entry belongs to */
-  tenantId: text("tenant_id").notNull(),
+  tenantId: varchar("tenant_id", { length: 64 }).notNull(),
 });
 
 export const insertMemoryEntrySchema = createInsertSchema(memoryEntriesTable).omit({ createdAt: true });

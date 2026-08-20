@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
 import { db, calendarInvitesTable } from "@workspace/db";
+import { selectOne } from "../lib/db-returning.js";
 import {
   CreateCalendarInviteBody,
   GetAvailableSlotsQueryParams,
@@ -13,10 +15,11 @@ router.post("/v1/calendar/invite", async (req, res): Promise<void> => {
   const parsed = CreateCalendarInviteBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [invite] = await db
+  const id = randomUUID();
+  await db
     .insert(calendarInvitesTable)
     .values({
-      id: randomUUID(),
+      id,
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       start: new Date(parsed.data.start),
@@ -27,8 +30,8 @@ router.post("/v1/calendar/invite", async (req, res): Promise<void> => {
       callId: parsed.data.callId ?? null,
       calendarEventId: `cal_${randomUUID().split("-")[0]}`,
       tenantId: req.tenantId!,
-    })
-    .returning();
+    });
+  const invite = await selectOne(calendarInvitesTable, eq(calendarInvitesTable.id, id));
   res.status(201).json(invite);
 });
 

@@ -124,23 +124,29 @@ router.get("/v1/stats/call-intelligence", async (req, res): Promise<void> => {
   const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
   const total = allCalls.length;
   if (total === 0) {
-    res.json(GetCallIntelligenceResponse.parse({ totalAnalyzed: 0, avgInterruptionsPerCall: 0, avgEscalationsPerCall: 0, bargeInRate: 0, avgLanguageSwitchesPerCall: 0 }));
+    res.json(GetCallIntelligenceResponse.parse({
+      avgInterruptions: 0,
+      avgEscalations: 0,
+      bargeInRate: 0,
+      totalLanguageSwitches: 0,
+      totalCallsAnalyzed: 0,
+    }));
     return;
   }
   const avgInterruptions = allCalls.reduce((s, c) => s + (c.interruptionCount ?? 0), 0) / total;
   const avgEscalations = allCalls.reduce((s, c) => s + (c.escalationCount ?? 0), 0) / total;
   const withBarge = allCalls.filter((c) => (c.interruptionCount ?? 0) > 0).length;
   const bargeInRate = (withBarge / total) * 100;
-  const avgSwitches = allCalls.reduce((s, c) => {
+  const totalLanguageSwitches = allCalls.reduce((s, c) => {
     const switches = Array.isArray(c.languageSwitches) ? (c.languageSwitches as unknown[]).length : 0;
     return s + switches;
-  }, 0) / total;
+  }, 0);
   res.json(GetCallIntelligenceResponse.parse({
-    totalAnalyzed: total,
-    avgInterruptionsPerCall: Math.round(avgInterruptions * 10) / 10,
-    avgEscalationsPerCall: Math.round(avgEscalations * 10) / 10,
+    avgInterruptions: Math.round(avgInterruptions * 10) / 10,
+    avgEscalations: Math.round(avgEscalations * 10) / 10,
     bargeInRate: Math.round(bargeInRate * 10) / 10,
-    avgLanguageSwitchesPerCall: Math.round(avgSwitches * 10) / 10,
+    totalLanguageSwitches,
+    totalCallsAnalyzed: total,
   }));
 });
 

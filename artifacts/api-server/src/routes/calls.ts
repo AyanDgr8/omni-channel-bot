@@ -17,6 +17,7 @@ import {
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { composeSystemPrompt, validatePersonaForVoiceBot } from "../lib/persona-composer.js";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role.js";
 import { logger } from "../lib/logger.js";
 
@@ -135,21 +136,19 @@ router.post("/v1/calls/dial", requireRole("SUPERVISOR"), async (req, res): Promi
     await resolvePersonaForBot(bot, req.tenantId!);
 
   const callId = randomUUID();
-  const [call] = await db
-    .insert(callsTable)
-    .values({
-      id: callId,
-      botId: parsed.data.botId,
-      direction: "OUTBOUND",
-      status: "INITIATING",
-      customerNumber: parsed.data.to,
-      startedAt: new Date(),
-      followUpSent: false,
-      personaId: activePersonaId,
-      composedPrompt: activeComposedPrompt,
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  await db.insert(callsTable).values({
+    id: callId,
+    botId: parsed.data.botId,
+    direction: "OUTBOUND",
+    status: "INITIATING",
+    customerNumber: parsed.data.to,
+    startedAt: new Date(),
+    followUpSent: false,
+    personaId: activePersonaId,
+    composedPrompt: activeComposedPrompt,
+    tenantId: req.tenantId!,
+  });
+  const call = await selectOne(callsTable, eq(callsTable.id, callId));
 
   await db.update(botsTable).set({ status: "BUSY", activeCalls: bot.activeCalls + 1 }).where(eq(botsTable.id, bot.id));
 
@@ -217,21 +216,19 @@ router.post("/v1/calls/inbound", requireRole("SUPERVISOR"), async (req, res): Pr
     await resolvePersonaForBot(bot, req.tenantId!);
 
   const callId = randomUUID();
-  const [call] = await db
-    .insert(callsTable)
-    .values({
-      id: callId,
-      botId: parsed.data.botId,
-      direction: "INBOUND",
-      status: "IN_PROGRESS",
-      customerNumber: parsed.data.from,
-      startedAt: new Date(),
-      followUpSent: false,
-      personaId: activePersonaId,
-      composedPrompt: activeComposedPrompt,
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  await db.insert(callsTable).values({
+    id: callId,
+    botId: parsed.data.botId,
+    direction: "INBOUND",
+    status: "IN_PROGRESS",
+    customerNumber: parsed.data.from,
+    startedAt: new Date(),
+    followUpSent: false,
+    personaId: activePersonaId,
+    composedPrompt: activeComposedPrompt,
+    tenantId: req.tenantId!,
+  });
+  const call = await selectOne(callsTable, eq(callsTable.id, callId));
 
   await db.update(botsTable).set({ status: "BUSY", activeCalls: bot.activeCalls + 1 }).where(eq(botsTable.id, bot.id));
 
@@ -353,21 +350,19 @@ router.post("/v1/calls/receive", async (req, res): Promise<void> => {
   }
 
   const callId = randomUUID();
-  const [call] = await db
-    .insert(callsTable)
-    .values({
-      id: callId,
-      botId,
-      direction: "INBOUND",
-      status: "RINGING",
-      customerNumber: from ?? null,
-      startedAt: new Date(),
-      followUpSent: false,
-      personaId: activePersonaId,
-      composedPrompt: activeComposedPrompt,
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  await db.insert(callsTable).values({
+    id: callId,
+    botId,
+    direction: "INBOUND",
+    status: "RINGING",
+    customerNumber: from ?? null,
+    startedAt: new Date(),
+    followUpSent: false,
+    personaId: activePersonaId,
+    composedPrompt: activeComposedPrompt,
+    tenantId: req.tenantId!,
+  });
+  const call = await selectOne(callsTable, eq(callsTable.id, callId));
 
   await db.update(botsTable).set({ status: "BUSY", activeCalls: bot.activeCalls + 1 }).where(eq(botsTable.id, bot.id));
 
@@ -394,11 +389,12 @@ router.delete("/v1/calls/:id", requireRole("SUPERVISOR"), async (req, res): Prom
   const params = HangupCallParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const [call] = await db
+  const scope = and(eq(callsTable.id, params.data.id), eq(callsTable.tenantId, req.tenantId!));
+  await db
     .update(callsTable)
     .set({ status: "COMPLETED", hangupReason: "BOT_HUNGUP", endedAt: new Date() })
-    .where(and(eq(callsTable.id, params.data.id), eq(callsTable.tenantId, req.tenantId!)))
-    .returning();
+    .where(scope);
+  const call = await selectOne(callsTable, scope);
   if (!call) { res.status(404).json({ error: "Call not found" }); return; }
   res.json(GetCallResponse.parse(call));
 });
@@ -412,11 +408,12 @@ router.post("/v1/calls/:id/transfer", requireRole("SUPERVISOR"), async (req, res
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const target = parsed.data.extension ?? parsed.data.e164 ?? parsed.data.agentName ?? "unknown";
-  const [call] = await db
+  const scope = and(eq(callsTable.id, params.data.id), eq(callsTable.tenantId, req.tenantId!));
+  await db
     .update(callsTable)
     .set({ status: "COMPLETED", hangupReason: "TRANSFERRED", transferTarget: target, endedAt: new Date() })
-    .where(and(eq(callsTable.id, params.data.id), eq(callsTable.tenantId, req.tenantId!)))
-    .returning();
+    .where(scope);
+  const call = await selectOne(callsTable, scope);
   if (!call) { res.status(404).json({ error: "Call not found" }); return; }
   res.json(GetCallResponse.parse(call));
 });

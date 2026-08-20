@@ -1,15 +1,15 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { mysqlTable, varchar, timestamp } from "drizzle-orm/mysql-core";
 
-export const tenantsTable = pgTable("tenants", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+export const tenantsTable = mysqlTable("tenants", {
+  id: varchar("id", { length: 64 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
   /** active | suspended */
-  status: text("status").notNull().default("active"),
-  region: text("region").notNull().default("global"),
+  status: varchar("status", { length: 32 }).notNull().default("active"),
+  region: varchar("region", { length: 64 }).notNull().default("global"),
   /** Secret checked in X-Webhook-Secret header for /v1/calls/receive */
-  webhookSecret: text("webhook_secret").notNull().$defaultFn(() => crypto.randomUUID()),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  webhookSecret: varchar("webhook_secret", { length: 255 }).notNull().$defaultFn(() => crypto.randomUUID()),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type Tenant = typeof tenantsTable.$inferSelect;

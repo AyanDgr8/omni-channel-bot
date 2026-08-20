@@ -1,40 +1,26 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "mysql",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
+      "version": "5",
       "when": 1786540802846,
       "tag": "0000_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "7",
+      "version": "5",
       "when": 1786540850144,
-      "tag": "0001_tenants_users",
+      "tag": "0001_session_store",
       "breakpoints": true
     },
     {
       "idx": 2,
-      "version": "7",
-      "when": 1786540932909,
-      "tag": "0002_add_tenant_id",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1786540958801,
-      "tag": "0003_bot_persona",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1786640000000,
-      "tag": "0004_provider_registry",
+      "version": "5",
+      "when": 1786540900000,
+      "tag": "0002_seed",
       "breakpoints": true
     }
   ]

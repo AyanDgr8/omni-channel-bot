@@ -17,7 +17,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import app from "../app";
 import { db, tenantsTable, usersTable, personasTable, callsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ beforeAll(async () => {
     status: "active",
     region: "global",
     webhookSecret: T1_WEBHOOK_SECRET,
-  }).onConflictDoNothing();
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
   // Seed tenant 2
   await db.insert(tenantsTable).values({
@@ -72,7 +72,7 @@ beforeAll(async () => {
     status: "active",
     region: "global",
     webhookSecret: T2_WEBHOOK_SECRET,
-  }).onConflictDoNothing();
+  }).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
   // Seed users
   await db.insert(usersTable).values([
@@ -100,7 +100,7 @@ beforeAll(async () => {
       role: "OWNER",
       status: "active",
     },
-  ]).onConflictDoNothing();
+  ]).onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
   // Obtain session cookies
   cookie1 = await login(`owner1-${T1_ID.slice(-8)}@test.local`, "test1234");
@@ -176,15 +176,18 @@ describe("Cross-tenant isolation", () => {
       seededPersonaIds.push(personaIdT1);
     } else {
       // LLM may fail in test env — just create a raw persona record
-      const [p] = await db.insert(personasTable).values({
+      // MySQL has no RETURNING — generate the id up front instead.
+      const newPersonaId = randomUUID();
+      await db.insert(personasTable).values({
+        id: newPersonaId,
         name: `ISO-Test-Persona-${randomUUID().slice(0, 8)}`,
         source: "manual",
         version: 1,
         isActive: false,
         tenantId: T1_ID,
-      }).returning();
-      personaIdT1 = p.id;
-      seededPersonaIds.push(p.id);
+      });
+      personaIdT1 = newPersonaId;
+      seededPersonaIds.push(newPersonaId);
     }
 
     // T1 can see their persona

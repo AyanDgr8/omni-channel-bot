@@ -1,66 +1,45 @@
 -- ────────────────────────────────────────────────────────────────────────────
--- 0004_provider_registry.sql
--- Provider Registry: providers, model_catalog, provider_call_log tables +
--- bot engine-config columns (llm_chain_json, stt_map_json, tts_map_json).
--- All statements are idempotent (IF NOT EXISTS / ON CONFLICT DO NOTHING).
+-- 0001_seed.sql  (MySQL)
+--
+-- Seed data only — no DDL. Safe to re-run: every statement uses INSERT IGNORE.
+--
+--   1. Default tenant  ("Default Organisation", slug = default)
+--   2. Default OWNER user  admin@voxagent.local / voxagent
+--   3. The vendor model catalogue (LLM / STT / TTS)
+--
+-- The express-session store table is created automatically by
+-- `express-mysql-session` on first boot, so it is not declared here.
 -- ────────────────────────────────────────────────────────────────────────────
 
--- ── providers ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS "providers" (
-  "id"                text PRIMARY KEY,
-  "tenant_id"         text,                          -- NULL = platform-pooled
-  "kind"              text NOT NULL,                 -- LLM | STT | TTS
-  "vendor"            text NOT NULL,
-  "display_name"      text NOT NULL,
-  "base_url"          text,
-  "auth_mode"         text NOT NULL DEFAULT 'bearer',
-  "api_key_encrypted" text,
-  "config_json"       jsonb,
-  "enabled"           boolean NOT NULL DEFAULT true,
-  "created_at"        timestamp with time zone NOT NULL DEFAULT now(),
-  "updated_at"        timestamp with time zone NOT NULL DEFAULT now()
+-- ─── Default tenant ─────────────────────────────────────────────────────────
+-- Fixed UUID so other rows and fixtures can reference it deterministically.
+INSERT IGNORE INTO `tenants` (`id`, `name`, `slug`, `status`, `region`, `webhook_secret`)
+VALUES (
+  '00000000-0000-0000-0000-000000000001',
+  'Default Organisation',
+  'default',
+  'active',
+  'global',
+  'voxagent-webhook-secret-default'
 );
+--> statement-breakpoint
 
--- ── model_catalog ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS "model_catalog" (
-  "id"             text PRIMARY KEY,
-  "vendor"         text NOT NULL,
-  "kind"           text NOT NULL,
-  "model_id"       text NOT NULL,
-  "display_name"   text NOT NULL,
-  "tier"           text NOT NULL DEFAULT 'standard',
-  "context_window" integer,
-  "cost_per_unit"  text,
-  "deprecated"     boolean NOT NULL DEFAULT false,
-  CONSTRAINT "model_catalog_vendor_kind_model_id_key" UNIQUE ("vendor", "kind", "model_id")
+-- ─── Default OWNER user ─────────────────────────────────────────────────────
+-- Password for admin@voxagent.local is "voxagent" (bcrypt, 10 rounds).
+-- CHANGE THIS BEFORE DEPLOYING.
+INSERT IGNORE INTO `users` (`id`, `tenant_id`, `email`, `password_hash`, `role`, `status`)
+VALUES (
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000001',
+  'admin@voxagent.local',
+  '$2b$10$CnRNW0qvkdMpOCnryzsL9.rQfN/hN14qWGq0GwOAHR836DpTHsrDe',
+  'OWNER',
+  'active'
 );
+--> statement-breakpoint
 
--- ── provider_call_log ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS "provider_call_log" (
-  "id"              text PRIMARY KEY,
-  "tenant_id"       text NOT NULL,
-  "provider_id"     text,
-  "call_id"         text,
-  "provider_vendor" text NOT NULL,
-  "provider_kind"   text NOT NULL,
-  "model_id"        text NOT NULL,
-  "outcome_status"  text NOT NULL,
-  "latency_ms"      integer NOT NULL,
-  "input_tokens"    integer,
-  "output_tokens"   integer,
-  "error_message"   text,
-  "created_at"      timestamp with time zone NOT NULL DEFAULT now()
-);
-
--- ── bots — engine-config columns ─────────────────────────────────────────────
-ALTER TABLE "bots" ADD COLUMN IF NOT EXISTS "llm_chain_json" jsonb;
-ALTER TABLE "bots" ADD COLUMN IF NOT EXISTS "stt_map_json"   jsonb;
-ALTER TABLE "bots" ADD COLUMN IF NOT EXISTS "tts_map_json"   jsonb;
-
--- ── model_catalog seed data ───────────────────────────────────────────────────
--- All rows use ON CONFLICT DO NOTHING so re-running the migration is safe.
-
-INSERT INTO "model_catalog" ("id","vendor","kind","model_id","display_name","tier","context_window","cost_per_unit","deprecated") VALUES
+-- ─── Vendor model catalogue ─────────────────────────────────────────────────
+INSERT IGNORE INTO `model_catalog` (`id`,`vendor`,`kind`,`model_id`,`display_name`,`tier`,`context_window`,`cost_per_unit`,`deprecated`) VALUES
 
 -- ── LLM: OpenAI ──────────────────────────────────────────────────────────────
 ('mc-openai-gpt4o',     'openai','LLM','gpt-4o',          'GPT-4o',          'premium',  128000, '$2.50/1M tokens in',  false),
@@ -133,6 +112,4 @@ INSERT INTO "model_catalog" ("id","vendor","kind","model_id","display_name","tie
 
 -- ── TTS: Azure ───────────────────────────────────────────────────────────────
 ('mc-az-neural',    'azure','TTS','neural','Azure Neural','standard',NULL,'$0.016/1K chars',false),
-('mc-az-hd',        'azure','TTS','hd',    'Azure HD',    'premium', NULL,'$0.030/1K chars',false)
-
-ON CONFLICT ("vendor","kind","model_id") DO NOTHING;
+('mc-az-hd',        'azure','TTS','hd',    'Azure HD',    'premium', NULL,'$0.030/1K chars',false);

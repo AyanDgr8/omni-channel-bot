@@ -8,6 +8,7 @@ import { eq, and, or, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { db, providersTable } from "@workspace/db";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role.js";
 import { auditMiddleware } from "../middleware/audit.js";
 import { encryptKey, decryptKey, maskKey } from "../lib/key-crypto.js";
@@ -95,16 +96,15 @@ router.post(
       }
     }
 
-    const [row] = await db
-      .insert(providersTable)
-      .values({
-        id: randomUUID(),
-        tenantId: req.tenantId!,
-        ...rest,
-        apiKeyEncrypted: apiKey ? encryptKey(apiKey) : null,
-        configJson: configJson ?? null,
-      })
-      .returning();
+    const id = randomUUID();
+    await db.insert(providersTable).values({
+      id,
+      tenantId: req.tenantId!,
+      ...rest,
+      apiKeyEncrypted: apiKey ? encryptKey(apiKey) : null,
+      configJson: configJson ?? null,
+    });
+    const row = (await selectOne(providersTable, eq(providersTable.id, id)))!;
     res.status(201).json(sanitize(row, req.tenantId!));
   }
 );
@@ -165,11 +165,9 @@ router.patch(
       updateSet.configJson = configJson;
     }
 
-    const [row] = await db
-      .update(providersTable)
-      .set(updateSet)
-      .where(and(eq(providersTable.id, id), eq(providersTable.tenantId, req.tenantId!)))
-      .returning();
+    const scope = and(eq(providersTable.id, id), eq(providersTable.tenantId, req.tenantId!));
+    await db.update(providersTable).set(updateSet).where(scope);
+    const row = await selectOne(providersTable, scope);
     if (!row) { res.status(404).json({ error: "Provider not found" }); return; }
     res.json(sanitize(row, req.tenantId!));
   }
@@ -183,10 +181,10 @@ router.delete(
   auditMiddleware("provider"),
   async (req, res): Promise<void> => {
     const id = req.params.id as string;
-    const [row] = await db
-      .delete(providersTable)
-      .where(and(eq(providersTable.id, id), eq(providersTable.tenantId, req.tenantId!)))
-      .returning();
+    // MySQL has no DELETE ... RETURNING — read the row first, then remove it.
+    const scope = and(eq(providersTable.id, id), eq(providersTable.tenantId, req.tenantId!));
+    const row = await selectOne(providersTable, scope);
+    if (row) await db.delete(providersTable).where(scope);
     if (!row) { res.status(404).json({ error: "Provider not found" }); return; }
     res.sendStatus(204);
   }

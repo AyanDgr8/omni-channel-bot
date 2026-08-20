@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, flowConfigsTable } from "@workspace/db";
 import { randomUUID } from "crypto";
+import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role.js";
 import { auditMiddleware } from "../middleware/audit.js";
 
@@ -46,16 +47,15 @@ router.post("/v1/flow/configs", requireRole("ADMIN"), auditMiddleware("flow"), a
   const { name, description, definition } = req.body as { name?: string; description?: string; definition?: unknown };
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
 
-  const [config] = await db
-    .insert(flowConfigsTable)
-    .values({
-      id: randomUUID(),
-      name,
-      description: description ?? null,
-      definition: definition ?? DEFAULT_FLOW,
-      tenantId: req.tenantId!,
-    })
-    .returning();
+  const id = randomUUID();
+  await db.insert(flowConfigsTable).values({
+    id,
+    name,
+    description: description ?? null,
+    definition: (definition ?? DEFAULT_FLOW) as typeof flowConfigsTable.$inferInsert["definition"],
+    tenantId: req.tenantId!,
+  });
+  const config = await selectOne(flowConfigsTable, eq(flowConfigsTable.id, id));
   res.status(201).json(config);
 });
 
@@ -72,26 +72,27 @@ router.get("/v1/flow/configs/:id", async (req, res): Promise<void> => {
 router.put("/v1/flow/configs/:id", requireRole("ADMIN"), auditMiddleware("flow"), async (req, res): Promise<void> => {
   const id = req.params.id as string;
   const { name, description, definition } = req.body as { name?: string; description?: string; definition?: unknown };
-  const [config] = await db
+  const scope = and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!));
+  await db
     .update(flowConfigsTable)
     .set({
       ...(name ? { name } : {}),
       ...(description !== undefined ? { description } : {}),
-      ...(definition ? { definition } : {}),
+      ...(definition ? { definition: definition as typeof flowConfigsTable.$inferInsert["definition"] } : {}),
       updatedAt: new Date(),
     })
-    .where(and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!)))
-    .returning();
+    .where(scope);
+  const config = await selectOne(flowConfigsTable, scope);
   if (!config) { res.status(404).json({ error: "Flow not found" }); return; }
   res.json(config);
 });
 
 router.delete("/v1/flow/configs/:id", requireRole("ADMIN"), auditMiddleware("flow"), async (req, res): Promise<void> => {
   const id = req.params.id as string;
-  const [config] = await db
-    .delete(flowConfigsTable)
-    .where(and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!)))
-    .returning();
+  // MySQL has no DELETE ... RETURNING — read the row first, then remove it.
+  const scope = and(eq(flowConfigsTable.id, id), eq(flowConfigsTable.tenantId, req.tenantId!));
+  const config = await selectOne(flowConfigsTable, scope);
+  if (config) await db.delete(flowConfigsTable).where(scope);
   if (!config) { res.status(404).json({ error: "Flow not found" }); return; }
   res.sendStatus(204);
 });
