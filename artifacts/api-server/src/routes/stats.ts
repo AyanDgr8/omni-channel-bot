@@ -88,16 +88,26 @@ router.get("/v1/stats/connect-outcomes", async (req, res): Promise<void> => {
   const allCalls = await db.select().from(callsTable).where(eq(callsTable.tenantId, tenantId));
   const withOutcome = allCalls.filter((c) => c.connectOutcome);
   const total = withOutcome.length;
-  const counts: Record<string, number> = {};
+  // Seeded with every outcome so the chart keeps a stable set of series even
+  // when an outcome has not occurred yet.
+  const counts: Record<string, number> = {
+    HUMAN: 0,
+    ANSWERING_MACHINE: 0,
+    IVR: 0,
+    SILENCE: 0,
+    NO_RESPONSE: 0,
+  };
   for (const call of withOutcome) {
     const key = call.connectOutcome!;
     counts[key] = (counts[key] ?? 0) + 1;
   }
-  const outcomes = Object.entries(counts).map(([outcome, count]) => ({
-    outcome,
-    count,
-    percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
-  }));
+  const outcomes = Object.entries(counts)
+    .map(([outcome, count]) => ({
+      outcome,
+      count,
+      percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.count - a.count || a.outcome.localeCompare(b.outcome));
   res.json(GetConnectOutcomesResponse.parse(outcomes));
 });
 
@@ -111,11 +121,13 @@ router.get("/v1/stats/language-mix", async (req, res): Promise<void> => {
     const key = call.languageDetected!;
     counts[key] = (counts[key] ?? 0) + 1;
   }
-  const languages = Object.entries(counts).map(([language, count]) => ({
-    language,
-    count,
-    percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
-  }));
+  const languages = Object.entries(counts)
+    .map(([language, count]) => ({
+      language,
+      count,
+      percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.count - a.count || a.language.localeCompare(b.language));
   res.json(GetLanguageMixResponse.parse(languages));
 });
 
@@ -125,11 +137,12 @@ router.get("/v1/stats/call-intelligence", async (req, res): Promise<void> => {
   const total = allCalls.length;
   if (total === 0) {
     res.json(GetCallIntelligenceResponse.parse({
-      avgInterruptions: 0,
-      avgEscalations: 0,
+      totalAnalyzed: 0,
+      avgInterruptionsPerCall: 0,
+      avgEscalationsPerCall: 0,
       bargeInRate: 0,
-      totalLanguageSwitches: 0,
-      totalCallsAnalyzed: 0,
+      avgLanguageSwitchesPerCall: 0,
+      timeSeries: buildIntelligenceTimeSeries(allCalls),
     }));
     return;
   }
@@ -137,17 +150,55 @@ router.get("/v1/stats/call-intelligence", async (req, res): Promise<void> => {
   const avgEscalations = allCalls.reduce((s, c) => s + (c.escalationCount ?? 0), 0) / total;
   const withBarge = allCalls.filter((c) => (c.interruptionCount ?? 0) > 0).length;
   const bargeInRate = (withBarge / total) * 100;
-  const totalLanguageSwitches = allCalls.reduce((s, c) => {
+  const avgSwitches = allCalls.reduce((s, c) => {
     const switches = Array.isArray(c.languageSwitches) ? (c.languageSwitches as unknown[]).length : 0;
     return s + switches;
-  }, 0);
+  }, 0) / total;
   res.json(GetCallIntelligenceResponse.parse({
-    avgInterruptions: Math.round(avgInterruptions * 10) / 10,
-    avgEscalations: Math.round(avgEscalations * 10) / 10,
+    totalAnalyzed: total,
+    avgInterruptionsPerCall: Math.round(avgInterruptions * 10) / 10,
+    avgEscalationsPerCall: Math.round(avgEscalations * 10) / 10,
     bargeInRate: Math.round(bargeInRate * 10) / 10,
-    totalLanguageSwitches,
-    totalCallsAnalyzed: total,
+    avgLanguageSwitchesPerCall: Math.round(avgSwitches * 10) / 10,
+    timeSeries: buildIntelligenceTimeSeries(allCalls),
   }));
 });
+
+/** Daily call-intelligence rollup for the trailing 14 days, oldest first. */
+function buildIntelligenceTimeSeries(
+  allCalls: Array<typeof callsTable.$inferSelect>,
+): Array<{
+  date: string;
+  callsAnalyzed: number;
+  avgInterruptionsPerCall: number;
+  bargeInRate: number;
+  escalationRate: number;
+}> {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const points = [];
+
+  for (let offset = 13; offset >= 0; offset -= 1) {
+    const start = new Date(today);
+    start.setUTCDate(today.getUTCDate() - offset);
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 1);
+    const callsForDay = allCalls.filter((call) => call.createdAt >= start && call.createdAt < end);
+    const count = callsForDay.length;
+    const interruptions = callsForDay.reduce((sum, call) => sum + (call.interruptionCount ?? 0), 0);
+    const withBargeIn = callsForDay.filter((call) => (call.interruptionCount ?? 0) > 0).length;
+    const escalated = callsForDay.filter((call) => (call.escalationCount ?? 0) > 0).length;
+
+    points.push({
+      date: start.toISOString().slice(0, 10),
+      callsAnalyzed: count,
+      avgInterruptionsPerCall: count > 0 ? Math.round((interruptions / count) * 10) / 10 : 0,
+      bargeInRate: count > 0 ? Math.round((withBargeIn / count) * 1000) / 10 : 0,
+      escalationRate: count > 0 ? Math.round((escalated / count) * 1000) / 10 : 0,
+    });
+  }
+
+  return points;
+}
 
 export default router;

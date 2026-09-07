@@ -29,7 +29,8 @@ AI Voice Bot Platform management dashboard — a full-stack control plane for en
 - `lib/api-client-react/src/generated/api.ts` — React Query hooks for frontend
 - `lib/db/src/schema/` — Drizzle ORM table definitions
 - `artifacts/api-server/src/routes/` — Express 5 route handlers
-- `artifacts/dashboard/src/pages/` — 7 dashboard pages
+- `artifacts/dashboard/src/pages/` — dashboard pages
+- `artifacts/telephony-worker/` — external FreeSWITCH SIP worker (deployed beside FreeSWITCH, not on Replit)
 - `artifacts/dashboard/src/components/Layout.tsx` — sidebar navigation shell
 
 ## Architecture decisions
@@ -41,6 +42,11 @@ AI Voice Bot Platform management dashboard — a full-stack control plane for en
 - MySQL has no array type: `supported_languages`, `attendees`, and `fallback_chain` are JSON columns whose defaults are applied in JS (`$defaultFn`), because MySQL forbids literal DEFAULTs on JSON/TEXT columns
 - Outbound calls simulate completion asynchronously (5s timeout) to demonstrate full call lifecycle
 - Messaging routes write to `message_logs` for full delivery audit trail
+- SIP telephony is split across a boundary: this app is the control plane (config, authorization, call state, compliance) and an external FreeSWITCH worker owns SIP signalling, RTP/SRTP, codecs and NAT — see `.agents/memory/external-sip-architecture.md`
+- SIP passwords are only ever stored as AES-256-GCM ciphertext in `sip_configs.password_encrypted`; plaintext is never modeled
+- Every outbound/inbound call passes one compliance gate (`lib/compliance-gate.ts`) which records an evidence row per decision, including blocked attempts that never become calls
+- The campaign dialler claims contacts with a lease (`campaign_contacts.lease_token`) under `FOR UPDATE SKIP LOCKED`, so a crashed worker's attempts are recoverable rather than lost
+- `sip_events` is capped at the newest 500 rows per bot; the column is `TIMESTAMP(3)` because MySQL's default second precision would make that ordering arbitrary
 
 ## Product
 
@@ -51,6 +57,9 @@ AI Voice Bot Platform management dashboard — a full-stack control plane for en
 - **Knowledge Base**: Searchable L1/L2/L3 memory Q&A entries with reindex trigger
 - **Messaging Hub**: WhatsApp/Telegram/Email send forms with delivery log
 - **Calendar**: Available slot picker + calendar invite composer
+- **Campaigns**: Outbound campaign engine — CSV contact import, calling windows, retry policy, concurrency caps, dispositions and callbacks
+- **Compliance**: DNC registry, consent ledger, per-jurisdiction calling policies, and the decision evidence trail
+- **Bot Telephony tab**: per-bot WebRTC/SIP transport switch plus the full SIP extension configuration and live registration status
 
 ## User preferences
 

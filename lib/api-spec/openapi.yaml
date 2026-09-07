@@ -77,6 +77,23 @@ paths:
                 $ref: "#/components/schemas/Call"
         "400":
           description: Bad request
+  /v1/calls/outbound:
+    post:
+      operationId: outboundCall
+      summary: Initiate an outbound call (compatibility alias for dial)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialInput"
+      responses:
+        "201":
+          description: Call initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
 
   /v1/calls/inbound:
     post:
@@ -162,6 +179,36 @@ paths:
         "404":
           description: Not found
 
+  /v1/calls/{id}/dtmf:
+    post:
+      operationId: sendCallDtmf
+      summary: Send one DTMF digit to an owned active SIP call
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallDtmfInput"
+      responses:
+        "200":
+          description: DTMF accepted by the telephony worker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SipActionResult"
+        "400":
+          description: Invalid DTMF digit
+        "404":
+          description: Active call not found
+        "409":
+          description: Call does not use SIP transport
+
   /v1/calls/{id}/conference:
     post:
       operationId: conferenceCall
@@ -187,6 +234,310 @@ paths:
                 $ref: "#/components/schemas/Call"
         "404":
           description: Not found
+
+  /v1/calls/{id}/media-events:
+    post:
+      operationId: recordCallMediaEvent
+      summary: Persist an authenticated telephony disclosure or recording-consent event
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallMediaEventInput"
+      responses:
+        "200":
+          description: Updated call
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Call"
+
+  # ─── Compliance ─────────────────────────────────────────────────
+  /v1/compliance/dnc:
+    get:
+      operationId: listDncEntries
+      summary: List tenant do-not-call entries
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: DNC entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DncEntry"
+    post:
+      operationId: createDncEntry
+      summary: Add a tenant do-not-call entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DncEntryInput"
+      responses:
+        "201":
+          description: DNC entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DncEntry"
+  /v1/compliance/dnc/{id}:
+    delete:
+      operationId: deleteDncEntry
+      summary: Remove a tenant do-not-call entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: DNC entry removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DncEntry"
+  /v1/compliance/dnc/import:
+    post:
+      operationId: importDncCsv
+      summary: Import DNC phone numbers from CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DncCsvImportInput"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvImportResult"
+  /v1/compliance/dnc/export:
+    get:
+      operationId: exportDncCsv
+      summary: Export tenant DNC entries as CSV
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+  /v1/compliance/consents:
+    get:
+      operationId: listConsentLedger
+      summary: List tenant consent events
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Consent events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsentEntry"
+    post:
+      operationId: recordConsent
+      summary: Record a grant or revocation consent event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsentInput"
+      responses:
+        "201":
+          description: Consent event recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsentEntry"
+  /v1/compliance/consents/{id}/revoke:
+    post:
+      operationId: revokeConsent
+      summary: Revoke a consent ledger entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Revocation event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsentEntry"
+  /v1/compliance/profiles:
+    get:
+      operationId: listComplianceProfiles
+      summary: List tenant jurisdiction profiles
+      responses:
+        "200":
+          description: Jurisdiction profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ComplianceProfile"
+  /v1/compliance/profiles/{jurisdictionCode}:
+    put:
+      operationId: updateComplianceProfile
+      summary: Create or update a jurisdiction profile
+      parameters:
+        - in: path
+          name: jurisdictionCode
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComplianceProfileInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceProfile"
+  /v1/compliance/evidence:
+    get:
+      operationId: listComplianceEvidence
+      summary: List compliance decision evidence
+      responses:
+        "200":
+          description: Compliance decisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ComplianceEvidence"
+  /v1/compliance/evidence/export:
+    get:
+      operationId: exportComplianceEvidenceCsv
+      summary: Export compliance decision evidence as CSV
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+  /v1/compliance/opt-out:
+    post:
+      operationId: recordInCallOptOut
+      summary: Add a caller to DNC during a live call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OptOutInput"
+      responses:
+        "201":
+          description: Opt-out recorded
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Campaigns ──────────────────────────────────────────────────
+  /v1/campaigns:
+    get:
+      operationId: listCampaigns
+      summary: List tenant campaigns with queue metrics
+      responses:
+        "200":
+          description: Campaigns
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Campaign" } } } }
+    post:
+      operationId: createCampaign
+      summary: Create an outbound campaign draft
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CampaignInput" } } } }
+      responses: { "201": { description: Campaign created, content: { application/json: { schema: { $ref: "#/components/schemas/Campaign" } } } } }
+  /v1/campaigns/{id}:
+    get:
+      operationId: getCampaign
+      summary: Get a campaign and queue metrics
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      responses: { "200": { description: Campaign, content: { application/json: { schema: { $ref: "#/components/schemas/Campaign" } } } }, "404": { description: Not found } }
+    patch:
+      operationId: updateCampaign
+      summary: Update campaign settings or make a valid lifecycle transition
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CampaignUpdate" } } } }
+      responses: { "200": { description: Campaign updated, content: { application/json: { schema: { $ref: "#/components/schemas/Campaign" } } } }, "409": { description: Invalid lifecycle transition } }
+  /v1/campaigns/{id}/stop:
+    post:
+      operationId: stopCampaign
+      summary: Permanently stop a campaign; stopped campaigns cannot be restarted
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      responses: { "200": { description: Campaign stopped, content: { application/json: { schema: { $ref: "#/components/schemas/Campaign" } } } } }
+  /v1/campaigns/{id}/clone:
+    post:
+      operationId: cloneCampaign
+      summary: Create a DRAFT A/B variant of a campaign
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/CampaignCloneInput" } } } }
+      responses: { "201": { description: Draft variant, content: { application/json: { schema: { $ref: "#/components/schemas/Campaign" } } } } }
+  /v1/campaigns/{id}/contacts/import:
+    post:
+      operationId: importCampaignContacts
+      summary: Preview or import CSV contacts after column mapping and compliance evaluation
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CampaignCsvImportInput" } } } }
+      responses: { "200": { description: Import preview or result, content: { application/json: { schema: { $ref: "#/components/schemas/CampaignImportReport" } } } } }
+  /v1/campaigns/{id}/contacts:
+    get:
+      operationId: listCampaignContacts
+      summary: List campaign queue contacts
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      responses: { "200": { description: Contacts, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CampaignContact" } } } } } }
+  /v1/campaigns/{id}/dispositions:
+    get:
+      operationId: listCampaignDispositions
+      summary: Monitor dispositions or export them as CSV
+      parameters: [ { $ref: "#/components/parameters/CampaignId" }, { in: query, name: format, schema: { type: string, enum: [csv] } } ]
+      responses: { "200": { description: Dispositions, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CampaignDisposition" } } }, text/csv: { schema: { type: string } } } } }
+  /v1/campaigns/{id}/callbacks:
+    get:
+      operationId: listCampaignCallbacks
+      summary: List scheduled callbacks for a campaign
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      responses: { "200": { description: Callbacks, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CampaignCallback" } } } } } }
+    post:
+      operationId: createCampaignCallback
+      summary: Schedule a callback for a campaign contact
+      parameters: [ { $ref: "#/components/parameters/CampaignId" } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CampaignCallbackInput" } } } }
+      responses: { "201": { description: Callback scheduled, content: { application/json: { schema: { $ref: "#/components/schemas/CampaignCallback" } } } } }
 
   # ─── Dashboard Stats ──────────────────────────────────────────────
   /v1/stats/overview:
@@ -228,6 +579,46 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/HangupReasonStat"
+
+  /v1/stats/connect-outcomes:
+    get:
+      operationId: getConnectOutcomes
+      summary: Distribution of call connection outcomes
+      responses:
+        "200":
+          description: Connection outcome breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectOutcomeStat"
+
+  /v1/stats/language-mix:
+    get:
+      operationId: getLanguageMix
+      summary: Distribution of detected languages
+      responses:
+        "200":
+          description: Detected language breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LanguageMixStat"
+
+  /v1/stats/call-intelligence:
+    get:
+      operationId: getCallIntelligence
+      summary: Call interruption and escalation metrics
+      responses:
+        "200":
+          description: Call intelligence metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallIntelligence"
 
   # ─── Bots ─────────────────────────────────────────────────────────
   /v1/bots:
@@ -315,6 +706,60 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /v1/bots/{id}/sip:
+    get:
+      operationId: getSipConfig
+      summary: Get a bot's SIP configuration (credentials are write-only)
+      parameters: [ { $ref: "#/components/parameters/BotId" } ]
+      responses:
+        "200": { description: SIP configuration, content: { application/json: { schema: { $ref: "#/components/schemas/SipConfig" } } } }
+    put:
+      operationId: updateSipConfig
+      summary: Create or update a bot's SIP configuration
+      parameters: [ { $ref: "#/components/parameters/BotId" } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SipConfigInput" } } } }
+      responses:
+        "200": { description: SIP configuration, content: { application/json: { schema: { $ref: "#/components/schemas/SipConfig" } } } }
+  /v1/bots/{id}/sip/register:
+    post:
+      operationId: registerSip
+      summary: Register this bot's SIP gateway
+      parameters: [ { $ref: "#/components/parameters/BotId" } ]
+      responses: { "200": { description: Registration requested, content: { application/json: { schema: { $ref: "#/components/schemas/SipActionResult" } } } } }
+  /v1/bots/{id}/sip/unregister:
+    post:
+      operationId: unregisterSip
+      summary: Unregister this bot's SIP gateway
+      parameters: [ { $ref: "#/components/parameters/BotId" } ]
+      responses: { "200": { description: Unregistration requested, content: { application/json: { schema: { $ref: "#/components/schemas/SipActionResult" } } } } }
+  /v1/bots/{id}/sip/test-call:
+    post:
+      operationId: testSipCall
+      summary: Place a SIP test call
+      parameters: [ { $ref: "#/components/parameters/BotId" } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SipTestCallInput" } } } }
+      responses: { "200": { description: Test call requested, content: { application/json: { schema: { $ref: "#/components/schemas/SipActionResult" } } } } }
+  /v1/bots/{id}/sip/status:
+    get:
+      operationId: getSipStatus
+      summary: Get SIP registration status
+      parameters: [ { $ref: "#/components/parameters/BotId" } ]
+      responses: { "200": { description: SIP status, content: { application/json: { schema: { $ref: "#/components/schemas/SipStatus" } } } } }
+  /v1/bots/{id}/sip/events:
+    get:
+      operationId: listSipEvents
+      summary: List recent SIP events
+      parameters:
+        - $ref: "#/components/parameters/BotId"
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { in: query, name: level, schema: { type: string, enum: [debug, info, warn, error] } }
+      responses: { "200": { description: SIP events, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SipEvent" } } } } } }
+  /v1/sip/health:
+    get:
+      operationId: getSipHealth
+      summary: Get external FreeSWITCH worker health
+      responses: { "200": { description: Worker health, content: { application/json: { schema: { $ref: "#/components/schemas/SipHealth" } } } } }
 
   # ─── Config ───────────────────────────────────────────────────────
   /v1/config/persona:
@@ -688,7 +1133,124 @@ paths:
                   $ref: "#/components/schemas/MessageLog"
 
 components:
+  parameters:
+    CampaignId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+    BotId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
   schemas:
+    Campaign:
+      type: object
+      required: [id, tenantId, botId, name, status, concurrencyCap, scheduleJson, metrics, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        botId: { type: string }
+        name: { type: string }
+        objectivePrompt: { type: string }
+        status: { type: string, enum: [DRAFT, SCHEDULED, RUNNING, PAUSED, COMPLETED, STOPPED] }
+        scheduleJson: { type: object, additionalProperties: true }
+        callingWindowOverride: { type: [object, "null"], additionalProperties: true }
+        concurrencyCap: { type: integer, minimum: 1, maximum: 50 }
+        retryPolicyJson: { type: object, additionalProperties: true }
+        successFieldsJson: { type: array, items: { type: string } }
+        cliNumber: { type: [string, "null"] }
+        voicemailScript: { type: [string, "null"] }
+        abVariantOf: { type: [string, "null"] }
+        metrics: { type: object, additionalProperties: { type: integer } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CampaignInput:
+      type: object
+      required: [name, botId]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        botId: { type: string }
+        objectivePrompt: { type: string }
+        scheduleJson: { type: object, additionalProperties: true }
+        callingWindowOverride: { type: [object, "null"], additionalProperties: true }
+        concurrencyCap: { type: integer, minimum: 1, maximum: 50 }
+        retryPolicyJson: { type: object, additionalProperties: true }
+        successFieldsJson: { type: array, items: { type: string } }
+        cliNumber: { type: [string, "null"] }
+        voicemailScript: { type: [string, "null"] }
+    CampaignUpdate:
+      allOf: [ { $ref: "#/components/schemas/CampaignInput" } ]
+      properties:
+        status: { type: string, enum: [DRAFT, SCHEDULED, RUNNING, PAUSED, COMPLETED, STOPPED] }
+    CampaignCloneInput:
+      type: object
+      properties: { name: { type: string }, copyContacts: { type: boolean, default: false } }
+    CampaignCsvImportInput:
+      type: object
+      required: [csv, phoneColumn]
+      properties:
+        csv: { type: string }
+        phoneColumn: { type: string }
+        variableColumns: { type: array, items: { type: string } }
+        mapping: { type: object, additionalProperties: { type: string } }
+        previewOnly: { type: boolean, default: false }
+    CampaignImportReport:
+      type: object
+      required: [headers, total, allowed, blocked, rows]
+      properties:
+        headers: { type: array, items: { type: string } }
+        total: { type: integer }
+        allowed: { type: integer }
+        blocked: { type: integer }
+        rows: { type: array, items: { type: object, additionalProperties: true } }
+    CampaignContact:
+      type: object
+      required: [id, campaignId, phoneE164, state, attempts]
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        phoneE164: { type: string }
+        variablesJson: { type: object, additionalProperties: true }
+        state: { type: string, enum: [PENDING, IN_FLIGHT, BLOCKED, DONE] }
+        attempts: { type: integer }
+        nextAttemptAt: { type: string, format: date-time }
+        lastDisposition: { type: [string, "null"] }
+        blockReason: { type: [string, "null"] }
+        callId: { type: [string, "null"] }
+    CampaignDisposition:
+      type: object
+      required: [id, campaignId, callId, code, createdAt]
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        callId: { type: string }
+        code: { type: string }
+        summaryText: { type: [string, "null"] }
+        extractedFieldsJson: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+    CampaignCallback:
+      type: object
+      required: [id, campaignId, campaignContactId, scheduledFor, fulfilled, createdAt]
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        campaignContactId: { type: string }
+        callId: { type: [string, "null"] }
+        scheduledFor: { type: string, format: date-time }
+        note: { type: [string, "null"] }
+        fulfilled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    CampaignCallbackInput:
+      type: object
+      required: [campaignContactId, scheduledFor]
+      properties:
+        campaignContactId: { type: string }
+        scheduledFor: { type: string, format: date-time }
+        note: { type: string }
+        callId: { type: string }
+
     HealthStatus:
       type: object
       required: [status]
@@ -745,6 +1307,33 @@ components:
         composedPrompt:
           type: ["string", "null"]
           description: Fully-composed system prompt injected for this call
+        personaName:
+          type: ["string", "null"]
+        personaVersion:
+          type: ["integer", "null"]
+        connectOutcome:
+          type: ["string", "null"]
+        interruptionCount:
+          type: integer
+        escalationCount:
+          type: integer
+        languageSwitches:
+          type: ["array", "null"]
+          items: { type: object, additionalProperties: true }
+        finalDisposition:
+          type: ["string", "null"]
+        disclosureText:
+          type: ["string", "null"]
+        disclosurePlayedAt:
+          type: ["string", "null"]
+          format: date-time
+        recordingConsentStatus:
+          type: ["string", "null"]
+        recordingConsentAt:
+          type: ["string", "null"]
+          format: date-time
+        complianceDecisionId:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -791,6 +1380,154 @@ components:
         to:
           type: ["string", "null"]
           description: Dialed number (DID) that received the call
+
+    DncEntry:
+      type: object
+      required: [id, tenantId, phoneNumber, source, addedAt, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        phoneNumber: { type: string }
+        source: { type: string }
+        reason: { type: ["string", "null"] }
+        addedAt: { type: string, format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        createdByUserId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    DncEntryInput:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber: { type: string }
+        source: { type: string }
+        reason: { type: string }
+        expiresAt: { type: ["string", "null"], format: date-time }
+
+    DncCsvImportInput:
+      type: object
+      required: [csv]
+      properties:
+        csv: { type: string }
+
+    ConsentEntry:
+      type: object
+      required: [id, tenantId, phoneNumber, consentType, status, source, capturedAt, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        phoneNumber: { type: string }
+        consentType: { type: string, enum: [VOICE_CALLING, RECORDING] }
+        status: { type: string, enum: [GRANTED, REVOKED] }
+        source: { type: string }
+        capturedAt: { type: string, format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        evidence: { type: ["string", "null"] }
+        actorUserId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    ConsentInput:
+      type: object
+      required: [phoneNumber, consentType, status]
+      properties:
+        phoneNumber: { type: string }
+        consentType: { type: string, enum: [VOICE_CALLING, RECORDING] }
+        status: { type: string, enum: [GRANTED, REVOKED] }
+        source: { type: string }
+        evidence: { type: string }
+        expiresAt: { type: ["string", "null"], format: date-time }
+
+    ComplianceProfile:
+      type: object
+      required: [id, tenantId, jurisdictionCode, displayName, enabled, timezone, callingWindowStart, callingWindowEnd, allowedDays, holidays, requireConsent, requireRecordingConsent, blockOnHoliday, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        jurisdictionCode: { type: string }
+        displayName: { type: string }
+        enabled: { type: boolean }
+        timezone: { type: string }
+        callingWindowStart: { type: string }
+        callingWindowEnd: { type: string }
+        allowedDays:
+          type: array
+          items: { type: string }
+        holidays:
+          type: array
+          items: { type: string }
+        requireConsent: { type: boolean }
+        requireRecordingConsent: { type: boolean }
+        mandatoryDisclosureText: { type: ["string", "null"] }
+        blockOnHoliday: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ComplianceProfileInput:
+      type: object
+      required: [displayName, timezone, callingWindowStart, callingWindowEnd, allowedDays, requireConsent, requireRecordingConsent, blockOnHoliday]
+      properties:
+        displayName: { type: string }
+        enabled: { type: boolean }
+        timezone: { type: string }
+        callingWindowStart: { type: string }
+        callingWindowEnd: { type: string }
+        allowedDays:
+          type: array
+          items: { type: string }
+        holidays:
+          type: array
+          items: { type: string }
+        requireConsent: { type: boolean }
+        requireRecordingConsent: { type: boolean }
+        mandatoryDisclosureText: { type: ["string", "null"] }
+        blockOnHoliday: { type: boolean }
+
+    ComplianceEvidence:
+      type: object
+      required: [id, tenantId, botId, phoneNumber, direction, decision, reasonCode, reason, jurisdictionCode, calledPartyTimezone, recordingConsentRequired, evaluatedAt, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        callId: { type: ["string", "null"] }
+        botId: { type: string }
+        phoneNumber: { type: string }
+        direction: { type: string }
+        decision: { type: string, enum: [ALLOWED, BLOCKED] }
+        reasonCode: { type: string }
+        reason: { type: string }
+        jurisdictionCode: { type: string }
+        calledPartyTimezone: { type: string }
+        disclosureText: { type: ["string", "null"] }
+        recordingConsentRequired: { type: boolean }
+        evaluatedAt: { type: string, format: date-time }
+        metadataJson: { type: ["object", "null"], additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    CsvImportResult:
+      type: object
+      required: [imported, rejected, errors]
+      properties:
+        imported: { type: integer }
+        rejected: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    OptOutInput:
+      type: object
+      required: [phoneNumber]
+      properties:
+        phoneNumber: { type: string }
+        callId: { type: string }
+        reason: { type: string }
+
+    CallMediaEventInput:
+      type: object
+      required: [event, evidence]
+      properties:
+        event: { type: string, enum: [DISCLOSURE_PLAYED, RECORDING_CONSENT_GRANTED, RECORDING_CONSENT_DECLINED] }
+        evidence: { type: string }
+        occurredAt: { type: string, format: date-time }
 
     TransferInput:
       type: object
@@ -866,6 +1603,46 @@ components:
         percentage:
           type: number
 
+    ConnectOutcomeStat:
+      type: object
+      required: [outcome, count, percentage]
+      properties:
+        outcome: { type: string }
+        count: { type: integer }
+        percentage: { type: number }
+
+    LanguageMixStat:
+      type: object
+      required: [language, count, percentage]
+      properties:
+        language: { type: string }
+        count: { type: integer }
+        percentage: { type: number }
+
+    CallIntelligence:
+      type: object
+      required: [totalAnalyzed, avgInterruptionsPerCall, avgEscalationsPerCall, bargeInRate, avgLanguageSwitchesPerCall, timeSeries]
+      properties:
+        totalAnalyzed: { type: integer }
+        avgInterruptionsPerCall: { type: number }
+        avgEscalationsPerCall: { type: number }
+        bargeInRate: { type: number }
+        avgLanguageSwitchesPerCall: { type: number }
+        timeSeries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallIntelligencePoint"
+
+    CallIntelligencePoint:
+      type: object
+      required: [date, callsAnalyzed, avgInterruptionsPerCall, bargeInRate, escalationRate]
+      properties:
+        date: { type: string }
+        callsAnalyzed: { type: integer }
+        avgInterruptionsPerCall: { type: number }
+        bargeInRate: { type: number }
+        escalationRate: { type: number }
+
     # ─── Bot schemas ──────────────────────────────────────────────
     Bot:
       type: object
@@ -881,6 +1658,10 @@ components:
           type: string
         sipDomain:
           type: ["string", "null"]
+        telephonyType:
+          type: string
+          enum: [webrtc, sip]
+          default: webrtc
         whatsappNumber:
           type: ["string", "null"]
         status:
@@ -917,6 +1698,17 @@ components:
         silenceRecoverySecs:
           type: integer
           default: 6
+        llmChainJson:
+          type: ["array", "null"]
+          items:
+            type: object
+            additionalProperties: true
+        sttMapJson:
+          type: ["object", "null"]
+          additionalProperties: true
+        ttsMapJson:
+          type: ["object", "null"]
+          additionalProperties: true
         createdAt:
           type: string
           format: date-time
@@ -933,6 +1725,10 @@ components:
           type: string
         sipDomain:
           type: ["string", "null"]
+        telephonyType:
+          type: string
+          enum: [webrtc, sip]
+          default: webrtc
         whatsappNumber:
           type: ["string", "null"]
         direction:
@@ -955,6 +1751,17 @@ components:
           type: integer
         silenceRecoverySecs:
           type: integer
+        llmChainJson:
+          type: ["array", "null"]
+          items:
+            type: object
+            additionalProperties: true
+        sttMapJson:
+          type: ["object", "null"]
+          additionalProperties: true
+        ttsMapJson:
+          type: ["object", "null"]
+          additionalProperties: true
 
     BotUpdate:
       type: object
@@ -967,6 +1774,9 @@ components:
           type: string
         sipDomain:
           type: ["string", "null"]
+        telephonyType:
+          type: string
+          enum: [webrtc, sip]
         whatsappNumber:
           type: ["string", "null"]
         status:
@@ -992,7 +1802,140 @@ components:
           type: integer
         silenceRecoverySecs:
           type: integer
-
+        llmChainJson:
+          type: ["array", "null"]
+          items:
+            type: object
+            additionalProperties: true
+        sttMapJson:
+          type: ["object", "null"]
+          additionalProperties: true
+        ttsMapJson:
+          type: ["object", "null"]
+          additionalProperties: true
+    SipConfig:
+      type: object
+      required: [id, botId, enabled, registrarHost, registrarPort, transport, extension, authUsername, registerExpirySeconds, keepaliveIntervalSeconds, codecs, dtmfMode, srtpMode, rtpPortMin, rtpPortMax, ptimeMs, natTraversal, maxConcurrentCalls, inboundDids, answerDelayMs, recordCalls, outboundEnabled, allowSelfSigned, debugLogging, registrationState, passwordIsSet]
+      properties:
+        id: { type: string }
+        botId: { type: string }
+        enabled: { type: boolean }
+        sipDomain: { type: [string, "null"] }
+        registrarHost: { type: string }
+        registrarPort: { type: integer, minimum: 1, maximum: 65535 }
+        transport: { type: string, enum: [udp, tcp, tls, wss] }
+        extension: { type: string }
+        authUsername: { type: string }
+        passwordIsSet: { type: boolean }
+        passwordMasked: { type: [string, "null"] }
+        displayName: { type: [string, "null"] }
+        callerIdNumber: { type: [string, "null"] }
+        outboundProxyHost: { type: [string, "null"] }
+        outboundProxyPort: { type: [integer, "null"], minimum: 1, maximum: 65535 }
+        registerExpirySeconds: { type: integer, minimum: 60, maximum: 86400 }
+        keepaliveIntervalSeconds: { type: integer, minimum: 1, maximum: 86400 }
+        codecs: { type: array, minItems: 1, items: { type: string, enum: [PCMU, PCMA, G722, OPUS] } }
+        dtmfMode: { type: string, enum: [rfc2833, sip_info, inband] }
+        srtpMode: { type: string, enum: [disabled, optional, required] }
+        rtpPortMin: { type: integer, minimum: 1, maximum: 65535 }
+        rtpPortMax: { type: integer, minimum: 1, maximum: 65535 }
+        ptimeMs: { type: integer, minimum: 1, maximum: 1000 }
+        natTraversal: { type: string, enum: [none, stun, force_rport] }
+        stunServer: { type: [string, "null"] }
+        localBindIp: { type: [string, "null"] }
+        externalIp: { type: [string, "null"] }
+        maxConcurrentCalls: { type: integer, minimum: 1, maximum: 10000 }
+        inboundDids: { type: array, items: { type: string, pattern: "^(\\+[1-9][0-9]{7,14}|\\+[1-9][0-9]{0,14}\\*)$" } }
+        answerDelayMs: { type: integer, minimum: 0, maximum: 120000 }
+        recordCalls: { type: boolean }
+        outboundEnabled: { type: boolean }
+        outboundPrefix: { type: [string, "null"] }
+        allowSelfSigned: { type: boolean }
+        debugLogging: { type: boolean }
+        registrationState: { type: string, enum: [unregistered, registering, registered, failed] }
+        lastRegisteredAt: { type: [string, "null"], format: date-time }
+        lastError: { type: [string, "null"] }
+        activeCalls: { type: integer }
+    SipConfigInput:
+      type: object
+      required: [registrarHost, extension, authUsername]
+      properties:
+        enabled: { type: boolean }
+        sipDomain: { type: [string, "null"] }
+        registrarHost: { type: string, minLength: 1, maxLength: 253 }
+        registrarPort: { type: integer, minimum: 1, maximum: 65535 }
+        transport: { type: string, enum: [udp, tcp, tls, wss] }
+        extension: { type: string, minLength: 1, maxLength: 64 }
+        authUsername: { type: string, minLength: 1, maxLength: 128 }
+        password: { type: string, writeOnly: true, maxLength: 1024, description: Blank or omitted retains the existing password }
+        displayName: { type: [string, "null"] }
+        callerIdNumber: { type: [string, "null"], maxLength: 64 }
+        outboundProxyHost: { type: [string, "null"], maxLength: 253 }
+        outboundProxyPort: { type: [integer, "null"], minimum: 1, maximum: 65535 }
+        registerExpirySeconds: { type: integer, minimum: 60, maximum: 86400 }
+        keepaliveIntervalSeconds: { type: integer, minimum: 1, maximum: 86400 }
+        codecs: { type: array, minItems: 1, items: { type: string, enum: [PCMU, PCMA, G722, OPUS] } }
+        dtmfMode: { type: string, enum: [rfc2833, sip_info, inband] }
+        srtpMode: { type: string, enum: [disabled, optional, required] }
+        rtpPortMin: { type: integer, minimum: 1, maximum: 65535 }
+        rtpPortMax: { type: integer, minimum: 1, maximum: 65535 }
+        ptimeMs: { type: integer, minimum: 1, maximum: 1000 }
+        natTraversal: { type: string, enum: [none, stun, force_rport] }
+        stunServer: { type: [string, "null"], maxLength: 253 }
+        localBindIp: { type: [string, "null"], maxLength: 64 }
+        externalIp: { type: [string, "null"], maxLength: 64 }
+        maxConcurrentCalls: { type: integer, minimum: 1, maximum: 10000 }
+        inboundDids: { type: array, items: { type: string, pattern: "^(\\+[1-9][0-9]{7,14}|\\+[1-9][0-9]{0,14}\\*)$" } }
+        answerDelayMs: { type: integer, minimum: 0, maximum: 120000 }
+        recordCalls: { type: boolean }
+        outboundEnabled: { type: boolean }
+        outboundPrefix: { type: [string, "null"], maxLength: 32 }
+        allowSelfSigned: { type: boolean }
+        debugLogging: { type: boolean }
+    CallDtmfInput:
+      type: object
+      required: [digit]
+      properties:
+        digit: { type: string, pattern: "^[0-9A-D*#]$" }
+    SipTestCallInput:
+      type: object
+      required: [to]
+      properties:
+        to: { type: string, pattern: "^\\+[1-9][0-9]{7,14}$" }
+    SipActionResult:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+        requestId: { type: [string, "null"] }
+        callId: { type: [string, "null"] }
+    SipStatus:
+      type: object
+      required: [registrationState, activeCalls]
+      properties:
+        registrationState: { type: string, enum: [unregistered, registering, registered, failed] }
+        lastRegisteredAt: { type: [string, "null"], format: date-time }
+        lastError: { type: [string, "null"] }
+        activeCalls: { type: integer }
+    SipEvent:
+      type: object
+      required: [id, botId, timestamp, level, summary]
+      properties:
+        id: { type: string }
+        botId: { type: string }
+        timestamp: { type: string, format: date-time }
+        level: { type: string, enum: [debug, info, warn, error] }
+        direction: { type: [string, "null"], enum: [inbound, outbound] }
+        methodResponse: { type: [string, "null"] }
+        summary: { type: string }
+        rawSnippet: { type: [string, "null"] }
+    SipHealth:
+      type: object
+      required: [enabled, reachable]
+      properties:
+        enabled: { type: boolean }
+        reachable: { type: boolean }
+        error: { type: [string, "null"] }
     # ─── Config schemas ───────────────────────────────────────────
     PersonaConfig:
       type: object

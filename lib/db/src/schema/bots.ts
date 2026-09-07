@@ -8,6 +8,8 @@ export const botsTable = mysqlTable("bots", {
   email: varchar("email", { length: 255 }),
   sipExtension: varchar("sip_extension", { length: 64 }).notNull(),
   sipDomain: varchar("sip_domain", { length: 255 }),
+  /** WebRTC is the legacy transport; SIP requires a corresponding sip_configs row. */
+  telephonyType: varchar("telephony_type", { length: 16 }).notNull().default("webrtc"),
   whatsappNumber: varchar("whatsapp_number", { length: 32 }),
   status: varchar("status", { length: 32 }).notNull().default("OFFLINE"),
   activeCalls: int("active_calls").notNull().default(0),

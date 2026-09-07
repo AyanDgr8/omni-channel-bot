@@ -11,11 +11,14 @@ import Memory from "@/pages/memory";
 import FlowEditor from "@/pages/flow-editor";
 import EmailAgent from "@/pages/email-agent";
 import Messaging from "@/pages/messaging";
+import VoiceAgent from "@/pages/voice-agent";
 import CalendarPage from "@/pages/calendar";
 import LoginPage from "@/pages/login";
 import UsersPage from "@/pages/users";
 import ProvidersPage from "@/pages/providers";
 import ModelCatalogPage from "@/pages/model-catalog";
+import CompliancePage from "@/pages/compliance";
+import CampaignsPage from "@/pages/campaigns";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
@@ -67,10 +70,13 @@ function Router() {
               <Route path="/flow" component={FlowEditor} />
               <Route path="/email-agent" component={EmailAgent} />
               <Route path="/messaging" component={Messaging} />
+              <Route path="/voice-agent" component={VoiceAgent} />
               <Route path="/calendar" component={CalendarPage} />
               <Route path="/users" component={UsersPage} />
               <Route path="/providers" component={ProvidersPage} />
               <Route path="/model-catalog" component={ModelCatalogPage} />
+              <Route path="/compliance" component={CompliancePage} />
+              <Route path="/campaigns" component={CampaignsPage} />
               <Route component={NotFound} />
             </Switch>
           </Layout>

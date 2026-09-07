@@ -247,7 +247,7 @@ function PropertiesPanel({ node, onChange, onDelete }: {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        <div className="px-2 py-1.5 rounded bg-muted text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+        <div className="px-2 py-1.5 rounded-lg border border-white/[0.07] bg-black/20 text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
           {node.type}
         </div>
 

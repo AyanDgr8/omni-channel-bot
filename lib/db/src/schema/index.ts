@@ -18,3 +18,7 @@ export * from "./audit_log";
 export * from "./providers";
 export * from "./model_catalog";
 export * from "./provider_call_log";
+export * from "./compliance";
+export * from "./campaigns";
+export * from "./sip";
+export * from "./sip_worker";

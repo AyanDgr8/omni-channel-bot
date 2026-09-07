@@ -10,12 +10,13 @@ import type { Bot as BotType } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import BotEngineConfig from "@/components/BotEngineConfig";
 import type { EngineConfig } from "@/components/BotEngineConfig";
+import SipConfigPanel from "@/components/SipConfigPanel";
 import {
   Bot, Plus, Trash2, Edit, Wifi, WifiOff, Phone, AlertCircle,
-  PhoneIncoming, PhoneOutgoing, Settings2, Globe, Clock, Mic2, Cpu,
+  PhoneIncoming, PhoneOutgoing, Settings2, Globe, Clock, Mic2, Cpu, Loader2, Server, Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 // Direction config shapes — mirrors lib/api-zod/src/generated/types/directionConfig.ts
 interface InboundDirectionConfig {
@@ -72,6 +74,7 @@ const TIMEZONES = [
 const emptyBasicForm = {
   displayName: "", email: "", sipExtension: "", sipDomain: "", whatsappNumber: "",
   direction: "inbound" as "inbound" | "outbound",
+  telephonyType: "webrtc" as "webrtc" | "sip",
 };
 
 const defaultInboundConfig = (): InboundDirectionConfig => ({
@@ -133,6 +136,8 @@ export default function Bots() {
   const [editBotData, setEditBotData] = useState<BotData | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
   const [form, setForm] = useState(emptyBasicForm);
+  const [telephonyConfirmOpen, setTelephonyConfirmOpen] = useState(false);
+  const [pendingTelephonyType, setPendingTelephonyType] = useState<"webrtc" | "sip" | null>(null);
   const [handling, setHandling] = useState(() => buildHandlingDefaults(null));
 
   const { data: bots, isLoading } = useListBots();
@@ -184,10 +189,51 @@ export default function Bots() {
       sipExtension: b.sipExtension, sipDomain: b.sipDomain ?? "",
       whatsappNumber: b.whatsappNumber ?? "",
       direction: (b.direction as "inbound" | "outbound") ?? "inbound",
+      telephonyType: (b.telephonyType as "webrtc" | "sip") ?? "webrtc",
     });
     setHandling(buildHandlingDefaults(b));
     setActiveTab("basic");
     setOpen(true);
+  }
+
+  function handleTelephonyChange(v: "webrtc" | "sip") {
+    if (form.telephonyType === "sip" && v === "webrtc") {
+      setPendingTelephonyType(v);
+      setTelephonyConfirmOpen(true);
+    } else {
+      setForm(f => ({ ...f, telephonyType: v }));
+      if (editBot) {
+        updateMut.mutate({ id: editBot, data: { telephonyType: v } }, {
+          onSuccess: () => {
+             toast({ title: `Telephony type changed to ${v}` });
+             qc.invalidateQueries({ queryKey: getListBotsQueryKey() });
+          },
+          onError: () => toast({ title: "Failed to change telephony type", variant: "destructive" })
+        });
+      }
+    }
+  }
+
+  function confirmTelephonyChange() {
+    if (pendingTelephonyType && editBot) {
+      // The backend performs SIP unregister and transport update atomically.
+      updateMut.mutate({ id: editBot, data: { telephonyType: pendingTelephonyType } }, {
+        onSuccess: () => {
+          setForm(f => ({ ...f, telephonyType: pendingTelephonyType }));
+          setPendingTelephonyType(null);
+          setTelephonyConfirmOpen(false);
+          toast({ title: "Switched to WebRTC successfully" });
+          qc.invalidateQueries({ queryKey: getListBotsQueryKey() });
+        },
+        onError: () => {
+          toast({ title: "Failed to switch to WebRTC", variant: "destructive" });
+        }
+      });
+    } else if (pendingTelephonyType) {
+        setForm(f => ({ ...f, telephonyType: pendingTelephonyType }));
+        setPendingTelephonyType(null);
+        setTelephonyConfirmOpen(false);
+    }
   }
 
   function handleSave() {
@@ -199,6 +245,7 @@ export default function Bots() {
       sipDomain: form.sipDomain || null,
       whatsappNumber: form.whatsappNumber || null,
       direction: handling.direction,
+      telephonyType: form.telephonyType,
       directionConfig: dirConfig as unknown as Record<string, unknown>,
       supportedLanguages: handling.supportedLanguages,
       defaultGreetingLanguage: handling.defaultGreetingLanguage,
@@ -246,11 +293,11 @@ export default function Bots() {
   const ob = handling.outboundConfig;
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground tracking-tight">Bot Network</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{(bots ?? []).length} registered agents</p>
+          <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Bot Network</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{(bots ?? []).length} registered agents</p>
         </div>
         <Button size="sm" onClick={openCreate} className="gap-1.5 text-xs">
           <Plus className="w-3 h-3" /> Register Bot
@@ -258,10 +305,10 @@ export default function Bots() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading...</div>
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div>
       ) : !bots?.length ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-          <Bot className="w-8 h-8 opacity-30" />
+        <div className="empty-state">
+          <Bot className="empty-state-icon" />
           <p className="text-sm">No bots registered yet</p>
           <Button size="sm" onClick={openCreate} variant="outline" className="text-xs">Register your first bot</Button>
         </div>
@@ -273,14 +320,14 @@ export default function Bots() {
             const dir = (bot.direction as string) ?? "inbound";
             const isInbound = dir === "inbound";
             return (
-              <div key={bot.id} className="bg-card border border-card-border rounded p-4 space-y-3">
+              <div key={bot.id} className="panel p-4 space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded bg-primary/15 flex items-center justify-center">
                       <Bot className="w-4 h-4 text-primary" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-semibold text-foreground">{bot.displayName}</p>
                         <Badge
                           variant="outline"
@@ -288,6 +335,13 @@ export default function Bots() {
                         >
                           {isInbound ? <PhoneIncoming className="w-2.5 h-2.5" /> : <PhoneOutgoing className="w-2.5 h-2.5" />}
                           {isInbound ? "Inbound" : "Outbound"}
+                        </Badge>
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] h-4 px-1.5 gap-0.5 font-medium"
+                        >
+                          {bot.telephonyType === "sip" ? <Server className="w-2.5 h-2.5" /> : <Monitor className="w-2.5 h-2.5" />}
+                          {bot.telephonyType === "sip" ? "SIP" : "WebRTC"}
                         </Badge>
                       </div>
                       <p className="text-[11px] text-muted-foreground font-mono">ext. {bot.sipExtension}</p>
@@ -352,6 +406,11 @@ export default function Bots() {
               <TabsTrigger value="handling" className="text-xs flex-1 gap-1">
                 <Settings2 className="w-3 h-3" /> Call Handling
               </TabsTrigger>
+              {editBot && (
+                <TabsTrigger value="telephony" className="text-xs flex-1 gap-1">
+                  <Phone className="w-3 h-3" /> Telephony
+                </TabsTrigger>
+              )}
               {editBot && (
                 <TabsTrigger value="engine" className="text-xs flex-1 gap-1">
                   <Cpu className="w-3 h-3" /> Engine
@@ -722,6 +781,45 @@ export default function Bots() {
               </section>
             </TabsContent>
 
+            {/* ── Telephony ───────────────────────────────────────── */}
+            {editBot && (
+              <TabsContent value="telephony" className="space-y-4 pt-3">
+                <div className="space-y-3">
+                  <Label className="text-xs">Connection Type</Label>
+                  <RadioGroup value={form.telephonyType} onValueChange={handleTelephonyChange} className="grid grid-cols-2 gap-3">
+                    <div>
+                      <RadioGroupItem value="webrtc" id="type-webrtc" className="peer sr-only" />
+                      <Label
+                        htmlFor="type-webrtc"
+                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                      >
+                        <Monitor className="mb-2 h-5 w-5" />
+                        <span className="text-sm font-semibold">WebRTC</span>
+                        <span className="text-[10px] text-muted-foreground text-center mt-1">Browser based calls</span>
+                      </Label>
+                    </div>
+                    <div>
+                      <RadioGroupItem value="sip" id="type-sip" className="peer sr-only" />
+                      <Label
+                        htmlFor="type-sip"
+                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                      >
+                        <Server className="mb-2 h-5 w-5" />
+                        <span className="text-sm font-semibold">SIP Extension</span>
+                        <span className="text-[10px] text-muted-foreground text-center mt-1">PBX / Trunk integration</span>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {form.telephonyType === "sip" && (
+                  <div className="pt-2 border-t border-border mt-4">
+                    <SipConfigPanel botId={editBot} />
+                  </div>
+                )}
+              </TabsContent>
+            )}
+
             {/* ── Engine Config ────────────────────────────────── */}
             {editBot && (
               <TabsContent value="engine" className="space-y-4 pt-3">
@@ -747,6 +845,22 @@ export default function Bots() {
                 {editBot ? "Save Changes" : "Register"}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Telephony Type Confirm Dialog */}
+      <Dialog open={telephonyConfirmOpen} onOpenChange={setTelephonyConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Switch to WebRTC?</DialogTitle>
+            <DialogDescription className="text-xs">
+              Your bot will stop accepting calls from its SIP extension. Your SIP configuration will be retained in case you want to switch back later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" size="sm" onClick={() => { setTelephonyConfirmOpen(false); setPendingTelephonyType(null); }} className="text-xs">Cancel</Button>
+            <Button size="sm" onClick={confirmTelephonyChange} className="text-xs gap-1"><Monitor className="w-3 h-3"/> Confirm WebRTC</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

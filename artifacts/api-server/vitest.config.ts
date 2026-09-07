@@ -10,5 +10,6 @@ export default defineConfig({
     // even when the workspace ssl/ certificates are present.
     env: { ENABLE_HTTPS: "false" },
     setupFiles: ["src/__tests__/setup.ts"],
+    fileParallelism: false,
   },
 });

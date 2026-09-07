@@ -4,18 +4,30 @@
  * FR-TECH-09: Platform-pooled providers (tenantId IS NULL) are visible but not mutable by tenant users.
  */
 import { Router, type IRouter } from "express";
-import { eq, and, or, isNull, asc } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { randomUUID } from "crypto";
-import { db, providersTable } from "@workspace/db";
+import { db, providersTable, providerCallLogTable } from "@workspace/db";
 import { selectOne } from "../lib/db-returning.js";
 import { requireRole } from "../middleware/require-role.js";
 import { auditMiddleware } from "../middleware/audit.js";
 import { encryptKey, decryptKey, maskKey } from "../lib/key-crypto.js";
 import { validateBaseUrl, ssrfSafeFetch } from "../lib/ssrf-guard.js";
 import { logger } from "../lib/logger.js";
+import { providerRegistry } from "../lib/provider-registry.js";
 
 const router: IRouter = Router();
+
+const ENV_PROVIDERS = [
+  { id: "legacy-openai", kind: "LLM", vendor: "openai", displayName: "OpenAI (environment)", envKeys: ["OPENAI_API_KEY"] },
+  { id: "legacy-anthropic", kind: "LLM", vendor: "anthropic", displayName: "Anthropic Claude (environment)", envKeys: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "claude_api_key"] },
+  { id: "legacy-google-gemini", kind: "LLM", vendor: "google-gemini", displayName: "Google Gemini (environment)", envKeys: ["GEMINI_API_KEY"] },
+  { id: "legacy-deepgram", kind: "STT", vendor: "deepgram", displayName: "Deepgram (environment)", envKeys: ["DEEPGRAM_API_KEY"] },
+] as const;
+
+function configuredEnvProviders() {
+  return ENV_PROVIDERS.filter((provider) => provider.envKeys.some((key) => Boolean(process.env[key]?.trim())));
+}
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
@@ -51,6 +63,7 @@ function sanitize(
   const { apiKeyEncrypted, ...rest } = row;
   const isOwn = row.tenantId !== null && row.tenantId === requestingTenantId;
   const decrypted = (isOwn && apiKeyEncrypted) ? decryptKey(apiKeyEncrypted) : null;
+  const breaker = providerRegistry.getCircuitHealth(row.id);
   return {
     ...rest,
     keyIsSet: !!apiKeyEncrypted,
@@ -58,18 +71,78 @@ function sanitize(
     // belong to the platform operator and must not leak to tenant users.
     keyPreview: decrypted ? maskKey(decrypted) : null,
     isPlatformPooled: row.tenantId === null,
+    circuitState: breaker.state,
+    circuitFailureCount: breaker.failureCount,
+    circuitRecoveryAt: breaker.recoveryAt === null
+      ? null
+      : new Date(breaker.recoveryAt).toISOString(),
   };
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 router.get("/v1/providers", async (req, res): Promise<void> => {
-  const rows = await db
+  const [rows, usageRows, rateLimitRows] = await Promise.all([db
     .select()
     .from(providersTable)
     .where(or(eq(providersTable.tenantId, req.tenantId!), isNull(providersTable.tenantId)))
-    .orderBy(asc(providersTable.createdAt));
-  res.json(rows.map((r) => sanitize(r, req.tenantId!)));
+    .orderBy(asc(providersTable.createdAt)),
+  db.select({
+    providerId: providerCallLogTable.providerId,
+    vendor: providerCallLogTable.providerVendor,
+    inputTokens: sql<number>`coalesce(sum(${providerCallLogTable.inputTokens}), 0)`,
+    outputTokens: sql<number>`coalesce(sum(${providerCallLogTable.outputTokens}), 0)`,
+    requestCount: sql<number>`count(*)`,
+  }).from(providerCallLogTable)
+    .where(eq(providerCallLogTable.tenantId, req.tenantId!))
+    .groupBy(providerCallLogTable.providerId, providerCallLogTable.providerVendor),
+  db.select({
+    providerId: providerCallLogTable.providerId,
+    vendor: providerCallLogTable.providerVendor,
+    rateLimitJson: providerCallLogTable.rateLimitJson,
+    capturedAt: providerCallLogTable.createdAt,
+  }).from(providerCallLogTable)
+    .where(and(
+      eq(providerCallLogTable.tenantId, req.tenantId!),
+      isNotNull(providerCallLogTable.rateLimitJson),
+    ))
+    .orderBy(desc(providerCallLogTable.createdAt))]);
+
+  const usageFor = (providerId: string | null, vendor: string) => {
+    const match = usageRows.find((u) => providerId
+      ? u.providerId === providerId
+      : u.providerId === null && u.vendor === vendor);
+    const inputTokens = Number(match?.inputTokens ?? 0);
+    const outputTokens = Number(match?.outputTokens ?? 0);
+    return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, requestCount: Number(match?.requestCount ?? 0) };
+  };
+
+  const rateLimitFor = (providerId: string, vendor: string) => {
+    const match = rateLimitRows.find((row) => row.providerId === providerId)
+      ?? rateLimitRows.find((row) => row.providerId === null && row.vendor === vendor);
+    if (!match?.rateLimitJson) return null;
+    try {
+      return { ...(JSON.parse(match.rateLimitJson) as Record<string, unknown>), capturedAt: match.capturedAt };
+    } catch {
+      return null;
+    }
+  };
+
+  const stored = rows.map((row) => ({
+    ...sanitize(row, req.tenantId!),
+    usage: usageFor(row.id, row.vendor),
+    rateLimit: rateLimitFor(row.id, row.vendor),
+    isEnvironmentConfigured: false,
+  }));
+  const env = configuredEnvProviders().map((provider) => ({
+    id: provider.id, tenantId: null, kind: provider.kind, vendor: provider.vendor,
+    displayName: provider.displayName, baseUrl: null, authMode: "bearer",
+    configJson: null, enabled: true, createdAt: null, updatedAt: null,
+    keyIsSet: true, keyPreview: null, isPlatformPooled: true,
+    isEnvironmentConfigured: true, usage: usageFor(provider.id, provider.vendor),
+    rateLimit: rateLimitFor(provider.id, provider.vendor),
+  }));
+  res.json([...stored, ...env]);
 });
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -291,7 +364,7 @@ async function testConnectivity(
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-3-haiku-20240307", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
         ...REDIRECT_SAFE,
       } as RequestInit);
       if (r.ok || r.status === 400) return { success: true, message: "Anthropic key authenticated" };

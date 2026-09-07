@@ -152,7 +152,7 @@ function LlmChainEditor({
       )}
 
       {chain.map((row, idx) => (
-        <div key={idx} className="flex items-start gap-2 bg-muted/30 border border-border rounded p-2.5">
+        <div key={idx} className="flex items-start gap-2 rounded-xl border border-white/[0.07] bg-black/20 p-2.5">
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono w-5 pt-2 flex-shrink-0">
             {idx + 1}
           </div>
@@ -285,7 +285,7 @@ function SttMapEditor({
       {configured.map((lang) => {
         const entry = sttMap[lang];
         return (
-          <div key={lang} className="flex items-start gap-2 bg-muted/30 border border-border rounded p-2.5">
+          <div key={lang} className="flex items-start gap-2 rounded-xl border border-white/[0.07] bg-black/20 p-2.5">
             <div className="text-[10px] font-semibold text-foreground uppercase pt-2 w-8 flex-shrink-0">
               {lang}
             </div>
@@ -397,7 +397,7 @@ function TtsMapEditor({
       {configured.map((lang) => {
         const entry = ttsMap[lang];
         return (
-          <div key={lang} className="flex items-start gap-2 bg-muted/30 border border-border rounded p-2.5">
+          <div key={lang} className="flex items-start gap-2 rounded-xl border border-white/[0.07] bg-black/20 p-2.5">
             <div className="text-[10px] font-semibold text-foreground uppercase pt-2 w-8 flex-shrink-0">
               {lang}
             </div>

@@ -81,11 +81,11 @@ export default function Memory() {
   const entries = data?.entries ?? [];
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground tracking-tight">Knowledge Base</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{data?.total ?? 0} memory entries — L1/L2/L3 tiers</p>
+          <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Knowledge Base</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{data?.total ?? 0} memory entries — L1/L2/L3 tiers</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={handleTrain} disabled={trainMut.isPending} className="gap-1.5 text-xs">
@@ -106,7 +106,7 @@ export default function Memory() {
             { label: "L2 Hit Rate", value: `${stats.l2HitRate}%`, sub: `${stats.l2Size} entries`, color: "primary" },
             { label: "L3 Hit Rate", value: `${stats.l3HitRate}%`, sub: `${stats.l3Size} entries`, color: "muted" },
           ].map(({ label, value, sub, color }) => (
-            <div key={label} className="bg-card border border-card-border rounded p-3">
+            <div key={label} className="panel p-3">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
               <p className={`text-xl font-bold mt-0.5 tabular-nums ${color === "accent" ? "text-accent" : color === "primary" ? "text-primary" : "text-foreground"}`}>{value}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>
@@ -127,7 +127,7 @@ export default function Memory() {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-card-border rounded overflow-hidden">
+      <div className="panel overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border">
@@ -151,7 +151,7 @@ export default function Memory() {
               </tr>
             ) : (
               entries.map((e) => (
-                <tr key={e.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                <tr key={e.id} className="border-b border-border/50 transition-colors hover:bg-white/[0.035]">
                   <td className="px-3 py-2.5 text-foreground max-w-[200px]"><p className="truncate">{e.question}</p></td>
                   <td className="px-3 py-2.5 text-muted-foreground max-w-[250px]"><p className="truncate">{e.answer}</p></td>
                   <td className="px-3 py-2.5">

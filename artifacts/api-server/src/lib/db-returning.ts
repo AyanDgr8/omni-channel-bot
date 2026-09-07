@@ -27,3 +27,16 @@ export async function selectOne<T extends MySqlTable>(
   const rows = await db.select().from(table).where(where).limit(1);
   return rows[0] as T["$inferSelect"] | undefined;
 }
+
+/**
+ * Extract the row array from a raw `db.execute()` result.
+ *
+ * The drivers disagree on the shape: node-postgres returns `{ rows: [...] }`
+ * whereas mysql2 returns the `[rows, fields]` tuple. Raw statements are only
+ * used here for things Drizzle's query builder cannot express (`FOR UPDATE`,
+ * `SKIP LOCKED`), so this keeps the unwrapping in one place.
+ */
+export function rowsOf<T = Record<string, unknown>>(result: unknown): T[] {
+  const rows = Array.isArray(result) ? result[0] : undefined;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+}

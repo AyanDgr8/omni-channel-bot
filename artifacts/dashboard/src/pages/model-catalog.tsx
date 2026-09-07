@@ -97,11 +97,11 @@ export default function ModelCatalogPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-bold text-foreground tracking-tight">Model Catalogue</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Model Catalogue</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {entries.filter((e) => !e.deprecated).length} active models across {vendors.length} vendors
         </p>
       </div>
@@ -175,7 +175,7 @@ export default function ModelCatalogPage() {
                   {group.map((e) => (
                     <tr
                       key={e.id}
-                      className={`bg-card border border-card-border rounded ${e.deprecated ? "opacity-50" : ""}`}
+                      className={`panel ${e.deprecated ? "opacity-50" : ""}`}
                     >
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${VENDOR_COLOR[e.vendor] ?? "bg-zinc-500/15 text-zinc-500"}`}>
@@ -218,13 +218,13 @@ export default function ModelCatalogPage() {
       })}
 
       {filtered.length === 0 && !isLoading && (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-          <BookOpen className="w-8 h-8 opacity-30" />
+        <div className="empty-state">
+          <BookOpen className="empty-state-icon" />
           <p className="text-sm">No models match your filters</p>
         </div>
       )}
 
-      <div className="mt-4 p-3 bg-muted/50 border border-border rounded text-[11px] text-muted-foreground leading-relaxed">
+      <div className="mt-4 p-3 rounded-xl border border-white/[0.07] bg-black/20 text-[11px] text-muted-foreground leading-relaxed">
         <strong className="text-foreground">Adding custom models:</strong> The model catalogue is managed at the platform level.
         New models are added via database migration. Contact your platform operator to register a custom vendor or model.
       </div>

@@ -7,7 +7,11 @@
  */
 import type { BotDirection } from './botDirection';
 import type { BotDirectionConfig } from './botDirectionConfig';
+import type { BotLlmChainJsonItem } from './botLlmChainJsonItem';
 import type { BotStatus } from './botStatus';
+import type { BotSttMapJson } from './botSttMapJson';
+import type { BotTelephonyType } from './botTelephonyType';
+import type { BotTtsMapJson } from './botTtsMapJson';
 
 export interface Bot {
   id: string;
@@ -17,6 +21,7 @@ export interface Bot {
   sipExtension: string;
   /** @nullable */
   sipDomain?: string | null;
+  telephonyType?: BotTelephonyType;
   /** @nullable */
   whatsappNumber?: string | null;
   status: BotStatus;
@@ -29,5 +34,11 @@ export interface Bot {
   endpointSilenceMs: number;
   backchannelThresholdMs: number;
   silenceRecoverySecs: number;
+  /** @nullable */
+  llmChainJson?: BotLlmChainJsonItem[] | null;
+  /** @nullable */
+  sttMapJson?: BotSttMapJson;
+  /** @nullable */
+  ttsMapJson?: BotTtsMapJson;
   createdAt: Date;
 }

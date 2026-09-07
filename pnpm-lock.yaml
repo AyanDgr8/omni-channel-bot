@@ -759,6 +759,12 @@ importers:
         specifier: 'catalog:'
         version: 3.25.76
 
+  artifacts/telephony-worker:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   artifacts/video:
     devDependencies:
       '@react-spring/web':

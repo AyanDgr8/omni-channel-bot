@@ -18,6 +18,8 @@ import { requireRole } from "../middleware/require-role";
 import { auditMiddleware } from "../middleware/audit";
 import type { LlmChainEntry, SttMapEntry, TtsMapEntry } from "../lib/provider-registry";
 import { logger } from "../lib/logger";
+import { controlFreeSwitch } from "../lib/freeswitch-worker";
+import { sipConfigsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -216,9 +218,34 @@ router.patch("/v1/bots/:id", requireRole("ADMIN"), auditMiddleware("bot"), async
   }
 
   const scope = and(eq(botsTable.id, params.data.id), eq(botsTable.tenantId, req.tenantId!));
+  const previous = await selectOne(botsTable, scope);
+  if (!previous) { res.status(404).json({ error: "Bot not found" }); return; }
+  // Preserve the SIP configuration but unregister it before changing transport.
+  if (previous.telephonyType === "sip" && parsed.data.telephonyType === "webrtc") {
+    const [config] = await db.select().from(sipConfigsTable)
+      .where(and(eq(sipConfigsTable.botId, previous.id), eq(sipConfigsTable.tenantId, req.tenantId!))).limit(1);
+    if (config) {
+      try { await controlFreeSwitch("unregister", config); }
+      catch (error) {
+        res.status(503).json({ error: error instanceof Error ? error.message : "FreeSWITCH worker unavailable" });
+        return;
+      }
+    }
+  }
   await db.update(botsTable).set(parsed.data).where(scope);
   const bot = await selectOne(botsTable, scope);
   if (!bot) { res.status(404).json({ error: "Bot not found" }); return; }
+  if (previous.telephonyType === "webrtc" && bot.telephonyType === "sip") {
+    const [config] = await db.select().from(sipConfigsTable)
+      .where(and(eq(sipConfigsTable.botId, bot.id), eq(sipConfigsTable.tenantId, req.tenantId!))).limit(1);
+    if (config?.enabled) {
+      try { await controlFreeSwitch("reload", config); await controlFreeSwitch("register", config); }
+      catch (error) {
+        res.status(503).json({ error: error instanceof Error ? error.message : "FreeSWITCH worker unavailable" });
+        return;
+      }
+    }
+  }
   res.json(GetBotResponse.parse(bot));
 });
 

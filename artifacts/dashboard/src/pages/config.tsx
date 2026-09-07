@@ -84,13 +84,18 @@ export default function Config() {
   const interrupts = ["HARD_INTERRUPT", "SOFT_INTERRUPT", "NO_INTERRUPT"] as const;
   const engines = ["openai", "anthropic", "gemini", "ollama"] as const;
 
-  if (!p || !c || !l) return <div className="p-6 text-sm text-muted-foreground">Loading configuration...</div>;
+  if (!p || !c || !l)
+    return (
+      <div className="flex items-center justify-center gap-2.5 p-16 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />Loading configuration…
+      </div>
+    );
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       <div>
-        <h1 className="text-lg font-bold text-foreground tracking-tight">Configuration</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Hot-reload runtime settings — changes apply immediately</p>
+        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Configuration</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Hot-reload runtime settings — changes apply immediately</p>
       </div>
 
       <Tabs defaultValue="persona">
@@ -106,7 +111,7 @@ export default function Config() {
         </TabsContent>
 
         <TabsContent value="conversation" className="mt-4">
-          <div className="bg-card border border-card-border rounded p-5 space-y-4 max-w-xl">
+          <div className="panel p-5 space-y-4 max-w-xl">
             {[
               { label: "Answer Delay (ms)", key: "answerDelayMs", min: 0, max: 2000, step: 50 },
               { label: "Max Silence (ms)", key: "maxSilenceMs", min: 500, max: 5000, step: 100 },
@@ -141,7 +146,7 @@ export default function Config() {
         </TabsContent>
 
         <TabsContent value="llm" className="mt-4">
-          <div className="bg-card border border-card-border rounded p-5 space-y-5 max-w-xl">
+          <div className="panel p-5 space-y-5 max-w-xl">
             <div className="space-y-1.5">
               <Label className="text-xs">Primary Engine</Label>
               <Select value={l.primary} onValueChange={(v) => setL((x: any) => ({ ...x, primary: v }))}>
@@ -235,15 +240,15 @@ function ApiKeysTab() {
 
   return (
     <div className="max-w-xl space-y-4">
-      <div className="bg-muted/50 border border-border rounded p-3 text-xs text-muted-foreground leading-relaxed">
-        <strong className="text-foreground">How to set API keys:</strong> Go to the <strong>Secrets</strong> tab in your Replit project sidebar and add the values for <code className="font-mono bg-muted px-1 rounded">OPENAI_API_KEY</code>, <code className="font-mono bg-muted px-1 rounded">GEMINI_API_KEY</code>, and <code className="font-mono bg-muted px-1 rounded">DEEPGRAM_API_KEY</code>. The server reads them automatically on restart.
+      <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3 text-xs text-muted-foreground leading-relaxed">
+        <strong className="text-foreground">How to set API keys:</strong> Go to the <strong>Secrets</strong> tab in your Replit project sidebar and add the values for <code className="rounded-md bg-white/[0.07] px-1.5 py-px font-mono text-[0.95em] text-foreground/90">OPENAI_API_KEY</code>, <code className="rounded-md bg-white/[0.07] px-1.5 py-px font-mono text-[0.95em] text-foreground/90">GEMINI_API_KEY</code>, and <code className="rounded-md bg-white/[0.07] px-1.5 py-px font-mono text-[0.95em] text-foreground/90">DEEPGRAM_API_KEY</code>. The server reads them automatically on restart.
       </div>
 
       {services.map(([service, status]) => {
         const meta = SERVICE_META[service];
         const testResult = testResults[service];
         return (
-          <div key={service} className="bg-card border border-border rounded p-4 space-y-3">
+          <div key={service} className="panel p-4 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <span className="text-lg">{meta?.icon ?? "🔑"}</span>
@@ -255,7 +260,7 @@ function ApiKeysTab() {
                         <CheckCircle2 className="w-2.5 h-2.5" /> Connected
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border">
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-white/[0.07] bg-white/[0.04] text-[10px] font-medium text-muted-foreground">
                         <XCircle className="w-2.5 h-2.5" /> Not set
                       </span>
                     )}
@@ -286,7 +291,7 @@ function ApiKeysTab() {
             </div>
 
             {status.isSet && status.preview && (
-              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted font-mono text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[0.07] bg-black/20 font-mono text-[11px] text-muted-foreground">
                 <Key className="w-3 h-3 flex-shrink-0" />
                 {status.preview}
               </div>

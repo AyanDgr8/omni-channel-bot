@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Trash2, Play, RefreshCw, CheckCircle2, XCircle, Loader2,
-  Key, Globe, Cpu, Mic, Volume2, ChevronDown, ChevronUp, Power,
+  Key, Globe, Cpu, Mic, Volume2, ChevronDown, ChevronUp, Gauge, Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,24 @@ interface Provider {
   keyIsSet: boolean;
   keyPreview: string | null;
   isPlatformPooled: boolean;
-  createdAt: string;
+  isEnvironmentConfigured: boolean;
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; requestCount: number };
+  rateLimit: ProviderRateLimit | null;
+  createdAt: string | null;
+  // Circuit-breaker health, surfaced by the provider registry.
+  circuitState: "closed" | "open" | "half-open";
+  circuitFailureCount: number;
+  circuitRecoveryAt: string | null;
+}
+
+interface ProviderRateLimit {
+  requestLimit?: number;
+  requestRemaining?: number;
+  tokenLimit?: number;
+  tokenRemaining?: number;
+  requestReset?: string;
+  tokenReset?: string;
+  capturedAt: string;
 }
 
 interface ModelCatalogEntry {
@@ -93,6 +110,97 @@ function VendorBadge({ vendor }: { vendor: string }) {
   );
 }
 
+function formatTokens(value: number) {
+  return new Intl.NumberFormat(undefined, { notation: value >= 10_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+}
+
+function formatRemainingTokens(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    notation: value >= 1_000 ? "compact" : "standard",
+    minimumFractionDigits: value >= 1_000 ? 1 : 0,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+const HEALTH_META = {
+  healthy: {
+    label: "Healthy",
+    className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
+    dotClassName: "bg-emerald-500",
+  },
+  degraded: {
+    label: "Degraded",
+    className: "border-amber-500/30 bg-amber-500/10 text-amber-500",
+    dotClassName: "bg-amber-500",
+  },
+  circuit_open: {
+    label: "Circuit open",
+    className: "border-destructive/30 bg-destructive/10 text-destructive",
+    dotClassName: "bg-destructive",
+  },
+} as const;
+
+function HealthBadge({ provider }: { provider: Provider }) {
+  const [open, setOpen] = useState(false);
+  const health =
+    provider.circuitState === "open"
+      ? "circuit_open"
+      : provider.circuitState === "half-open" || provider.circuitFailureCount > 0
+        ? "degraded"
+        : "healthy";
+  const meta = HEALTH_META[health];
+  const recovery = provider.circuitRecoveryAt
+    ? new Date(provider.circuitRecoveryAt)
+    : null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${provider.displayName} health: ${meta.label}`}
+        onClick={() => setOpen((value) => !value)}
+        className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-[10px] font-semibold transition-colors hover:brightness-110 ${meta.className}`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${meta.dotClassName}`} />
+        {meta.label}
+        <ChevronDown className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-8 z-20 w-56 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg">
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <Activity className="h-3.5 w-3.5" />
+            Provider health
+          </div>
+          <dl className="mt-2 space-y-1.5 text-[11px]">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Recent failures</dt>
+              <dd className="font-medium tabular-nums">{provider.circuitFailureCount}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Recovery</dt>
+              <dd className="text-right font-medium">
+                {recovery
+                  ? recovery.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                  : health === "degraded"
+                    ? "Trial ready"
+                    : "Ready"}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-2 border-t border-border pt-2 text-[10px] leading-relaxed text-muted-foreground">
+            {health === "circuit_open"
+              ? "Calls are using fallback providers until a recovery trial is allowed."
+              : health === "degraded"
+                ? "Recent failures detected; calls can still attempt this provider."
+                : "No recent provider failures in this server process."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Provider card ────────────────────────────────────────────────────────────
 
 interface ProviderCardProps {
@@ -114,7 +222,11 @@ function ProviderCard({ provider: p, onEdit, onDelete, onTest, onToggle, testing
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-semibold text-foreground">{p.displayName}</p>
               <VendorBadge vendor={p.vendor} />
-              {p.isPlatformPooled && (
+              {p.isEnvironmentConfigured ? (
+                <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-sky-500/40 text-sky-400">
+                  Environment
+                </Badge>
+              ) : p.isPlatformPooled && (
                 <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/40 text-primary">
                   Platform Pool
                 </Badge>
@@ -124,6 +236,7 @@ function ProviderCard({ provider: p, onEdit, onDelete, onTest, onToggle, testing
                   Disabled
                 </Badge>
               )}
+              <HealthBadge provider={p} />
             </div>
             {p.baseUrl && (
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
@@ -141,7 +254,7 @@ function ProviderCard({ provider: p, onEdit, onDelete, onTest, onToggle, testing
               <CheckCircle2 className="w-2.5 h-2.5" /> Key set
             </span>
           ) : p.authMode !== "none" ? (
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border">
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-white/[0.07] bg-white/[0.04] text-[10px] font-medium text-muted-foreground">
               <XCircle className="w-2.5 h-2.5" /> No key
             </span>
           ) : null}
@@ -184,9 +297,42 @@ function ProviderCard({ provider: p, onEdit, onDelete, onTest, onToggle, testing
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg border border-white/[0.07] bg-black/15 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens used</div>
+          <div className="mt-0.5 text-sm font-semibold text-foreground">{formatTokens(p.usage.totalTokens)}</div>
+          <div className="text-[10px] text-muted-foreground">
+            {formatTokens(p.usage.inputTokens)} in · {formatTokens(p.usage.outputTokens)} out · {p.usage.requestCount} calls
+          </div>
+        </div>
+        <div className="rounded-lg border border-white/[0.07] bg-black/15 px-3 py-2">
+          <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <Gauge className="h-3 w-3" /> Provider quota
+          </div>
+          {p.rateLimit ? (
+            <>
+              <div className="mt-0.5 text-sm font-semibold text-foreground">
+                {p.rateLimit.requestRemaining !== undefined && p.rateLimit.requestLimit !== undefined
+                  ? `${p.rateLimit.requestRemaining}/${p.rateLimit.requestLimit} req`
+                  : "Request limit not reported"}
+                {p.rateLimit.tokenRemaining !== undefined
+                  ? ` · ${formatRemainingTokens(p.rateLimit.tokenRemaining)} tok left`
+                  : ""}
+              </div>
+              <div className="text-[10px] text-muted-foreground">Reported by the provider on the most recent call</div>
+            </>
+          ) : (
+            <>
+              <div className="mt-0.5 text-sm font-semibold text-muted-foreground">No call reported yet</div>
+              <div className="text-[10px] text-muted-foreground">Quota appears after the next successful provider call</div>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Key preview — only for own providers */}
       {p.keyPreview && (
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted font-mono text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[0.07] bg-black/20 font-mono text-[11px] text-muted-foreground">
           <Key className="w-3 h-3 flex-shrink-0" />
           {p.keyPreview}
         </div>
@@ -290,7 +436,7 @@ function ProviderDrawer({ open, onOpenChange, editProvider, onSave, saving, vend
           {editProvider ? (
             <div>
               <Label className="text-xs">Provider Type</Label>
-              <div className="mt-1 px-2.5 py-1.5 rounded bg-muted text-xs text-muted-foreground border border-border">
+              <div className="mt-1 px-2.5 py-1.5 rounded-lg border border-white/[0.07] bg-black/20 text-xs text-muted-foreground">
                 {editProvider.kind} <span className="text-[10px]">(cannot be changed after creation)</span>
               </div>
             </div>
@@ -324,7 +470,7 @@ function ProviderDrawer({ open, onOpenChange, editProvider, onSave, saving, vend
           {editProvider ? (
             <div>
               <Label className="text-xs">Vendor</Label>
-              <div className="mt-1 px-2.5 py-1.5 rounded bg-muted text-xs text-muted-foreground border border-border font-mono">
+              <div className="mt-1 px-2.5 py-1.5 rounded-lg border border-white/[0.07] bg-black/20 text-xs text-muted-foreground font-mono">
                 {editProvider.vendor} <span className="font-sans text-[10px]">(cannot be changed after creation)</span>
               </div>
             </div>
@@ -359,7 +505,7 @@ function ProviderDrawer({ open, onOpenChange, editProvider, onSave, saving, vend
           {editProvider ? (
             <div>
               <Label className="text-xs">Authentication</Label>
-              <div className="mt-1 px-2.5 py-1.5 rounded bg-muted text-xs text-muted-foreground border border-border">
+              <div className="mt-1 px-2.5 py-1.5 rounded-lg border border-white/[0.07] bg-black/20 text-xs text-muted-foreground">
                 {editProvider.authMode === "bearer" ? "Bearer token" : editProvider.authMode === "api-key" ? "API key header" : "No auth"}
                 <span className="ml-1 text-[10px]">(cannot be changed after creation)</span>
               </div>
@@ -417,7 +563,7 @@ function ProviderDrawer({ open, onOpenChange, editProvider, onSave, saving, vend
           </button>
 
           {showAdvanced && (
-            <div className="space-y-3 border border-border rounded p-3 bg-muted/30">
+            <div className="space-y-3 rounded-xl border border-white/[0.07] bg-black/20 p-3">
               <div>
                 <Label className="text-xs">Custom Base URL</Label>
                 <Input
@@ -461,6 +607,8 @@ export default function ProvidersPage() {
     queryKey: ["/api/v1/providers"],
     queryFn: fetchProviders,
     staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: catalog = [] } = useQuery({
@@ -574,7 +722,8 @@ export default function ProvidersPage() {
   }));
 
   const ownCount = providers.filter((p) => !p.isPlatformPooled).length;
-  const pooledCount = providers.filter((p) => p.isPlatformPooled).length;
+  const envCount = providers.filter((p) => p.isEnvironmentConfigured).length;
+  const pooledCount = providers.filter((p) => p.isPlatformPooled && !p.isEnvironmentConfigured).length;
 
   if (isLoading) {
     return (
@@ -585,13 +734,13 @@ export default function ProvidersPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground tracking-tight">Providers</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {ownCount} tenant provider{ownCount !== 1 ? "s" : ""} · {pooledCount} platform-pooled
+          <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Providers</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {ownCount} tenant · {envCount} environment · {pooledCount} platform-pooled
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -636,8 +785,8 @@ export default function ProvidersPage() {
 
       {/* Empty state */}
       {providers.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-          <Key className="w-8 h-8 opacity-30" />
+        <div className="empty-state">
+          <Key className="empty-state-icon" />
           <p className="text-sm">No providers configured yet</p>
           <p className="text-[11px] text-center max-w-xs">
             Add your own API keys to power LLM, STT, and TTS for this tenant.

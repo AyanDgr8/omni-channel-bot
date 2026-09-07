@@ -7,6 +7,10 @@
  */
 import type { BotInputDirection } from './botInputDirection';
 import type { BotInputDirectionConfig } from './botInputDirectionConfig';
+import type { BotInputLlmChainJsonItem } from './botInputLlmChainJsonItem';
+import type { BotInputSttMapJson } from './botInputSttMapJson';
+import type { BotInputTelephonyType } from './botInputTelephonyType';
+import type { BotInputTtsMapJson } from './botInputTtsMapJson';
 
 export interface BotInput {
   displayName: string;
@@ -15,6 +19,7 @@ export interface BotInput {
   sipExtension: string;
   /** @nullable */
   sipDomain?: string | null;
+  telephonyType?: BotInputTelephonyType;
   /** @nullable */
   whatsappNumber?: string | null;
   direction?: BotInputDirection;
@@ -25,4 +30,10 @@ export interface BotInput {
   endpointSilenceMs?: number;
   backchannelThresholdMs?: number;
   silenceRecoverySecs?: number;
+  /** @nullable */
+  llmChainJson?: BotInputLlmChainJsonItem[] | null;
+  /** @nullable */
+  sttMapJson?: BotInputSttMapJson;
+  /** @nullable */
+  ttsMapJson?: BotInputTtsMapJson;
 }

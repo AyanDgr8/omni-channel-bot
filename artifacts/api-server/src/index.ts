@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { runMigrations } from "./lib/run-migrations";
 import { provisionAdmins } from "./lib/provision-admins";
 import { httpsEnabled, loadTlsMaterial } from "./lib/ssl";
+import { runCampaignTick } from "./routes/campaigns";
 
 const rawPort = process.env["PORT"];
 
@@ -58,6 +59,7 @@ runMigrations()
 
     server.listen(port, () => {
       logger.info({ port, protocol }, "Server listening");
+      setInterval(() => void runCampaignTick().catch((err) => logger.error({ err }, "Campaign worker tick failed")), 5_000).unref();
     });
   })
   .catch((err) => {

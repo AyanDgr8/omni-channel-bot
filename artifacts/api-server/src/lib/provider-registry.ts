@@ -61,6 +61,15 @@ interface ResolvedLlmEntry {
   params: { temperature: number; maxTokens: number };
 }
 
+export interface ProviderRateLimit {
+  requestLimit?: number;
+  requestRemaining?: number;
+  tokenLimit?: number;
+  tokenRemaining?: number;
+  requestReset?: string;
+  tokenReset?: string;
+}
+
 export interface LlmResult {
   text: string;
   modelId: string;
@@ -68,6 +77,7 @@ export interface LlmResult {
   vendor: string;
   inputTokens?: number;
   outputTokens?: number;
+  rateLimit?: ProviderRateLimit;
 }
 
 export interface ResolvedSessionProvider {
@@ -88,7 +98,13 @@ export interface ResolvedSessionConfig {
 
 // ─── Circuit Breaker ─────────────────────────────────────────────────────────
 
-type CircuitState = "closed" | "open" | "half-open";
+export type CircuitState = "closed" | "open" | "half-open";
+
+export interface CircuitHealthSnapshot {
+  state: CircuitState;
+  failureCount: number;
+  recoveryAt: number | null;
+}
 
 interface BreakerState {
   state: CircuitState;
@@ -105,6 +121,27 @@ function makeBreakerKey(providerId: string): string {
   return `cb:${providerId}`;
 }
 
+function numericHeader(headers: Headers, ...names: string[]): number | undefined {
+  for (const name of names) {
+    const raw = headers.get(name);
+    if (raw !== null && Number.isFinite(Number(raw))) return Number(raw);
+  }
+  return undefined;
+}
+
+function parseRateLimitHeaders(headers: Headers, vendor: "openai" | "anthropic"): ProviderRateLimit | undefined {
+  const prefix = vendor === "openai" ? "x-ratelimit" : "anthropic-ratelimit";
+  const value: ProviderRateLimit = {
+    requestLimit: numericHeader(headers, `${prefix}-limit-requests`, `${prefix}-requests-limit`),
+    requestRemaining: numericHeader(headers, `${prefix}-remaining-requests`, `${prefix}-requests-remaining`),
+    tokenLimit: numericHeader(headers, `${prefix}-limit-tokens`, `${prefix}-tokens-limit`),
+    tokenRemaining: numericHeader(headers, `${prefix}-remaining-tokens`, `${prefix}-tokens-remaining`),
+    requestReset: headers.get(`${prefix}-reset-requests`) ?? headers.get(`${prefix}-requests-reset`) ?? undefined,
+    tokenReset: headers.get(`${prefix}-reset-tokens`) ?? headers.get(`${prefix}-tokens-reset`) ?? undefined,
+  };
+  return Object.values(value).some((entry) => entry !== undefined) ? value : undefined;
+}
+
 // ─── Vendor-specific HTTP callers ─────────────────────────────────────────────
 
 async function callOpenAICompatible(
@@ -116,7 +153,7 @@ async function callOpenAICompatible(
   params: { temperature: number; maxTokens: number },
   signal: AbortSignal,
   isCustomUrl = false
-): Promise<{ text: string; inputTokens?: number; outputTokens?: number }> {
+): Promise<{ text: string; inputTokens?: number; outputTokens?: number; rateLimit?: ProviderRateLimit }> {
   const url = `${baseUrl}/chat/completions`;
   const init: RequestInit = {
     method: "POST",
@@ -154,6 +191,50 @@ async function callOpenAICompatible(
     text: data.choices[0].message.content,
     inputTokens: data.usage?.prompt_tokens,
     outputTokens: data.usage?.completion_tokens,
+    rateLimit: parseRateLimitHeaders(res.headers, "openai"),
+  };
+}
+
+async function callOpenAIWebSearch(
+  baseUrl: string,
+  apiKey: string,
+  modelId: string,
+  systemPrompt: string,
+  userPrompt: string,
+  params: { temperature: number; maxTokens: number },
+  signal: AbortSignal
+): Promise<{ text: string; inputTokens?: number; outputTokens?: number; rateLimit?: ProviderRateLimit }> {
+  const res = await fetch(`${baseUrl}/responses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: modelId,
+      instructions: systemPrompt,
+      input: userPrompt,
+      tools: [{ type: "web_search" }],
+      max_output_tokens: params.maxTokens,
+      store: false,
+    }),
+    signal,
+    redirect: "error",
+  } as RequestInit);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  const data = await res.json() as {
+    output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+    output_text?: string;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
+  const text = data.output_text ?? data.output
+    ?.flatMap((item) => item.content ?? [])
+    .filter((item) => item.type === "output_text" && item.text)
+    .map((item) => item.text)
+    .join("\n") ?? "";
+  if (!text.trim()) throw new Error("OpenAI web search returned no spoken answer");
+  return {
+    text,
+    inputTokens: data.usage?.input_tokens,
+    outputTokens: data.usage?.output_tokens,
+    rateLimit: parseRateLimitHeaders(res.headers, "openai"),
   };
 }
 
@@ -163,8 +244,9 @@ async function callAnthropic(
   systemPrompt: string,
   userPrompt: string,
   params: { temperature: number; maxTokens: number },
-  signal: AbortSignal
-): Promise<{ text: string; inputTokens?: number; outputTokens?: number }> {
+  signal: AbortSignal,
+  enableWebSearch = false
+): Promise<{ text: string; inputTokens?: number; outputTokens?: number; rateLimit?: ProviderRateLimit }> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -178,19 +260,21 @@ async function callAnthropic(
       temperature: params.temperature,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
+      ...(enableWebSearch ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }] } : {}),
     }),
     signal,
     redirect: "error",
   } as RequestInit);
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
   const data = (await res.json()) as {
-    content: Array<{ text: string }>;
+    content: Array<{ type?: string; text?: string }>;
     usage?: { input_tokens?: number; output_tokens?: number };
   };
   return {
-    text: data.content[0].text,
+    text: data.content.filter((block) => block.type === "text" && block.text).map((block) => block.text).join("\n"),
     inputTokens: data.usage?.input_tokens,
     outputTokens: data.usage?.output_tokens,
+    rateLimit: parseRateLimitHeaders(res.headers, "anthropic"),
   };
 }
 
@@ -201,7 +285,7 @@ async function callGemini(
   userPrompt: string,
   params: { temperature: number; maxTokens: number },
   signal: AbortSignal
-): Promise<{ text: string; inputTokens?: number; outputTokens?: number }> {
+): Promise<{ text: string; inputTokens?: number; outputTokens?: number; rateLimit?: ProviderRateLimit }> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
     {
@@ -236,12 +320,20 @@ async function dispatchLlmCall(
   systemPrompt: string,
   userPrompt: string,
   params: { temperature: number; maxTokens: number },
-  signal: AbortSignal
-): Promise<{ text: string; inputTokens?: number; outputTokens?: number }> {
+  signal: AbortSignal,
+  enableWebSearch = false
+): Promise<{ text: string; inputTokens?: number; outputTokens?: number; rateLimit?: ProviderRateLimit }> {
   const apiKey = provider.apiKey ?? "";
 
   switch (provider.vendor) {
     case "openai":
+      if (enableWebSearch) {
+        return callOpenAIWebSearch(
+          provider.baseUrl ?? "https://api.openai.com/v1",
+          apiKey || (process.env.OPENAI_API_KEY ?? ""),
+          modelId, systemPrompt, userPrompt, params, signal
+        );
+      }
       return callOpenAICompatible(
         provider.baseUrl ?? "https://api.openai.com/v1",
         apiKey || (process.env.OPENAI_API_KEY ?? ""),
@@ -251,7 +343,7 @@ async function dispatchLlmCall(
     case "anthropic":
       return callAnthropic(
         apiKey || (process.env.ANTHROPIC_API_KEY ?? ""),
-        modelId, systemPrompt, userPrompt, params, signal
+        modelId, systemPrompt, userPrompt, params, signal, enableWebSearch
       );
     case "google-gemini":
       return callGemini(
@@ -303,7 +395,7 @@ async function dispatchLlmCall(
  */
 const LEGACY_ENGINE_MAP: Record<string, { modelId: string; envKey: string; defaultBaseUrl?: string }> = {
   "openai":        { modelId: "gpt-4o-mini",            envKey: "OPENAI_API_KEY" },
-  "anthropic":     { modelId: "claude-3-haiku-20240307", envKey: "ANTHROPIC_API_KEY" },
+  "anthropic":     { modelId: "claude-haiku-4-5-20251001", envKey: "ANTHROPIC_API_KEY" },
   "google-gemini": { modelId: "gemini-1.5-flash",        envKey: "GEMINI_API_KEY" },
   // llm_config stores the Gemini engine as "gemini" (legacy alias); both names map to
   // the same env var and model so existing tenant configurations continue to work.
@@ -313,6 +405,18 @@ const LEGACY_ENGINE_MAP: Record<string, { modelId: string; envKey: string; defau
   "ollama":        { modelId: "llama3",                  envKey: "OLLAMA_API_URL" },
 };
 const LEGACY_ENGINE_DEFAULT_ORDER = ["openai", "anthropic", "google-gemini", "ollama"] as const;
+
+/** Accept historical key names while preferring the documented variables. */
+function readProviderEnv(envKey: string): string | undefined {
+  const aliases: Record<string, string[]> = {
+    ANTHROPIC_API_KEY: ["CLAUDE_API_KEY", "claude_api_key"],
+  };
+  for (const key of [envKey, ...(aliases[envKey] ?? [])]) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
 
 // ─── ProviderRegistry ─────────────────────────────────────────────────────────
 
@@ -338,6 +442,39 @@ export class ProviderRegistry {
       });
     }
     return this.breakers.get(key)!;
+  }
+
+  /**
+   * Return a read-only view of a provider's live breaker without creating one.
+   * An unseen provider is healthy by definition because it has no recorded
+   * failures in this process.
+   */
+  getCircuitHealth(providerId: string, now = Date.now()): CircuitHealthSnapshot {
+    const breaker = this.breakers.get(makeBreakerKey(providerId));
+    if (!breaker) {
+      return { state: "closed", failureCount: 0, recoveryAt: null };
+    }
+
+    if (
+      breaker.state === "open" &&
+      breaker.openedAt !== null &&
+      now - breaker.openedAt >= breaker.recoveryTimeoutMs
+    ) {
+      return {
+        state: "half-open",
+        failureCount: breaker.failureCount,
+        recoveryAt: null,
+      };
+    }
+
+    return {
+      state: breaker.state,
+      failureCount: breaker.failureCount,
+      recoveryAt:
+        breaker.state === "open" && breaker.openedAt !== null
+          ? breaker.openedAt + breaker.recoveryTimeoutMs
+          : null,
+    };
   }
 
   private isOpen(b: BreakerState): boolean {
@@ -496,7 +633,7 @@ export class ProviderRegistry {
       const engineDef = LEGACY_ENGINE_MAP[vendor];
       if (!engineDef) continue;
 
-      const envValue = process.env[engineDef.envKey];
+      const envValue = readProviderEnv(engineDef.envKey);
       if (!envValue) continue;
 
       // For Ollama, envKey holds the base URL (not an API key)
@@ -570,7 +707,19 @@ export class ProviderRegistry {
       .orderBy(asc(providersTable.createdAt))
       .limit(1);
 
-    if (!prov) return null;
+    if (!prov) {
+      // Environment-backed Deepgram remains available when no tenant/database
+      // STT provider has been configured. The secret stays in the media plane.
+      if (process.env.DEEPGRAM_API_KEY?.trim()) {
+        return {
+          providerId: "legacy-deepgram",
+          vendor: "deepgram",
+          displayName: "Deepgram (environment)",
+          modelId: "nova-2",
+        };
+      }
+      return null;
+    }
 
     const [model] = await db
       .select({ modelId: modelCatalogTable.modelId })
@@ -674,6 +823,7 @@ export class ProviderRegistry {
     latencyMs: number;
     inputTokens?: number;
     outputTokens?: number;
+    rateLimit?: ProviderRateLimit;
     error?: string;
   }): Promise<void> {
     try {
@@ -689,6 +839,7 @@ export class ProviderRegistry {
         latencyMs: params.latencyMs,
         inputTokens: params.inputTokens ?? null,
         outputTokens: params.outputTokens ?? null,
+        rateLimitJson: params.rateLimit ? JSON.stringify(params.rateLimit) : null,
         errorMessage: params.error ?? null,
       });
     } catch (err) {
@@ -711,6 +862,7 @@ export class ProviderRegistry {
     botId?: string;
     callId?: string;
     timeoutMs?: number;
+    webSearch?: boolean;
   }): Promise<LlmResult> {
     const { systemPrompt, userPrompt, tenantId, botId, callId } = params;
 
@@ -762,7 +914,8 @@ export class ProviderRegistry {
           systemPrompt,
           userPrompt,
           entry.params,
-          controller.signal
+          controller.signal,
+          params.webSearch ?? false
         );
 
         const latencyMs = Date.now() - t0;
@@ -774,6 +927,7 @@ export class ProviderRegistry {
           outcome: "success", latencyMs,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
+          rateLimit: result.rateLimit,
         });
 
         logger.info({ vendor: entry.provider.vendor, modelId: entry.modelId, latencyMs }, "LLM call succeeded");
@@ -785,6 +939,7 @@ export class ProviderRegistry {
           vendor: entry.provider.vendor,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
+          rateLimit: result.rateLimit,
         };
       } catch (err) {
         const latencyMs = Date.now() - t0;

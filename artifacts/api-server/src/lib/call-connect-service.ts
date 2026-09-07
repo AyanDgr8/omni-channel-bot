@@ -242,6 +242,13 @@ export function composeGreeting(
   };
 }
 
+/** Put a jurisdiction-required disclosure before every other spoken phrase. */
+export function prependDisclosure(disclosureText: string | null | undefined, greetingText: string): string {
+  const disclosure = disclosureText?.trim();
+  if (!disclosure) return greetingText;
+  return `${disclosure} ${greetingText}`.trim();
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Step 3 — Language detection and switching
 // ──────────────────────────────────────────────────────────────────────────────
@@ -463,7 +470,8 @@ export function getCallWrapPhrase(language: string): string {
 export async function runCallConnectSimulation(
   callId: string,
   botConfig: BotCallConfig,
-  botName: string
+  botName: string,
+  mandatoryDisclosure?: string | null
 ): Promise<{
   outcome: ConnectOutcome;
   disposition: CallDisposition;
@@ -487,7 +495,9 @@ export async function runCallConnectSimulation(
   }
 
   // Step 2: Greeting
-  const { text: greetingText, language: greetingLanguage } = composeGreeting(botConfig, botName);
+  const baseGreeting = composeGreeting(botConfig, botName);
+  const greetingText = prependDisclosure(mandatoryDisclosure, baseGreeting.text);
+  const greetingLanguage = baseGreeting.language;
 
   // Simulate call intelligence events
   const interruptionCount = outcome === "HUMAN" ? Math.floor(Math.random() * 4) : 0;

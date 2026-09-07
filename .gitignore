@@ -50,7 +50,7 @@ Thumbs.db
 
 # Local environment variables (contains real credentials)
 .env
-# .env.local
+.env.local
 
 # TLS certificates (private key must never be committed)
 ssl/

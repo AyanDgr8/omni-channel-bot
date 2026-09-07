@@ -36,8 +36,21 @@ export const callsTable = mysqlTable("calls", {
   // ── Persona Audit ──────────────────────────────────────────────────────────
   /** ID of the persona that was active when this call started */
   personaId: varchar("persona_id", { length: 64 }),
+  /** Snapshotted name of the persona at call-start (survives renames/deletes) */
+  personaName: varchar("persona_name", { length: 255 }),
+  /** Snapshotted trait version of the persona at call-start */
+  personaVersion: int("persona_version"),
   /** Fully-composed system prompt injected for this call */
   composedPrompt: text("composed_prompt"),
+  /** Disclosure text that was required and placed first in call setup */
+  disclosureText: text("disclosure_text"),
+  /** Timestamp at which the disclosure was played to the called party */
+  disclosurePlayedAt: datetime("disclosure_played_at"),
+  /** NOT_REQUIRED | PENDING | GRANTED | DECLINED */
+  recordingConsentStatus: varchar("recording_consent_status", { length: 32 }),
+  recordingConsentAt: datetime("recording_consent_at"),
+  /** Compliance evidence row that allowed this call to be created */
+  complianceDecisionId: varchar("compliance_decision_id", { length: 64 }),
 
   /** VoxAgent organisation this call belongs to */
   tenantId: varchar("tenant_id", { length: 64 }).notNull(),

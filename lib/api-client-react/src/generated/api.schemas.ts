@@ -5,6 +5,192 @@
  * VoxAgent AI Voice Bot Platform API
  * OpenAPI spec version: 1.0.0
  */
+export type CampaignStatus = typeof CampaignStatus[keyof typeof CampaignStatus];
+
+
+export const CampaignStatus = {
+  DRAFT: 'DRAFT',
+  SCHEDULED: 'SCHEDULED',
+  RUNNING: 'RUNNING',
+  PAUSED: 'PAUSED',
+  COMPLETED: 'COMPLETED',
+  STOPPED: 'STOPPED',
+} as const;
+
+export type CampaignScheduleJson = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type CampaignCallingWindowOverride = { [key: string]: unknown } | null;
+
+export type CampaignRetryPolicyJson = { [key: string]: unknown };
+
+export type CampaignMetrics = {[key: string]: number};
+
+export interface Campaign {
+  id: string;
+  tenantId: string;
+  botId: string;
+  name: string;
+  objectivePrompt?: string;
+  status: CampaignStatus;
+  scheduleJson: CampaignScheduleJson;
+  /** @nullable */
+  callingWindowOverride?: CampaignCallingWindowOverride;
+  /**
+     * @minimum 1
+     * @maximum 50
+     */
+  concurrencyCap: number;
+  retryPolicyJson?: CampaignRetryPolicyJson;
+  successFieldsJson?: string[];
+  /** @nullable */
+  cliNumber?: string | null;
+  /** @nullable */
+  voicemailScript?: string | null;
+  /** @nullable */
+  abVariantOf?: string | null;
+  metrics: CampaignMetrics;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CampaignInputScheduleJson = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type CampaignInputCallingWindowOverride = { [key: string]: unknown } | null;
+
+export type CampaignInputRetryPolicyJson = { [key: string]: unknown };
+
+export interface CampaignInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  botId: string;
+  objectivePrompt?: string;
+  scheduleJson?: CampaignInputScheduleJson;
+  /** @nullable */
+  callingWindowOverride?: CampaignInputCallingWindowOverride;
+  /**
+     * @minimum 1
+     * @maximum 50
+     */
+  concurrencyCap?: number;
+  retryPolicyJson?: CampaignInputRetryPolicyJson;
+  successFieldsJson?: string[];
+  /** @nullable */
+  cliNumber?: string | null;
+  /** @nullable */
+  voicemailScript?: string | null;
+}
+
+export type CampaignUpdateStatus = typeof CampaignUpdateStatus[keyof typeof CampaignUpdateStatus];
+
+
+export const CampaignUpdateStatus = {
+  DRAFT: 'DRAFT',
+  SCHEDULED: 'SCHEDULED',
+  RUNNING: 'RUNNING',
+  PAUSED: 'PAUSED',
+  COMPLETED: 'COMPLETED',
+  STOPPED: 'STOPPED',
+} as const;
+
+export type CampaignUpdate = CampaignInput & {
+  status?: CampaignUpdateStatus;
+};
+
+export interface CampaignCloneInput {
+  name?: string;
+  copyContacts?: boolean;
+}
+
+export type CampaignCsvImportInputMapping = {[key: string]: string};
+
+export interface CampaignCsvImportInput {
+  csv: string;
+  phoneColumn: string;
+  variableColumns?: string[];
+  mapping?: CampaignCsvImportInputMapping;
+  previewOnly?: boolean;
+}
+
+export type CampaignImportReportRowsItem = { [key: string]: unknown };
+
+export interface CampaignImportReport {
+  headers: string[];
+  total: number;
+  allowed: number;
+  blocked: number;
+  rows: CampaignImportReportRowsItem[];
+}
+
+export type CampaignContactVariablesJson = { [key: string]: unknown };
+
+export type CampaignContactState = typeof CampaignContactState[keyof typeof CampaignContactState];
+
+
+export const CampaignContactState = {
+  PENDING: 'PENDING',
+  IN_FLIGHT: 'IN_FLIGHT',
+  BLOCKED: 'BLOCKED',
+  DONE: 'DONE',
+} as const;
+
+export interface CampaignContact {
+  id: string;
+  campaignId: string;
+  phoneE164: string;
+  variablesJson?: CampaignContactVariablesJson;
+  state: CampaignContactState;
+  attempts: number;
+  nextAttemptAt?: string;
+  /** @nullable */
+  lastDisposition?: string | null;
+  /** @nullable */
+  blockReason?: string | null;
+  /** @nullable */
+  callId?: string | null;
+}
+
+export type CampaignDispositionExtractedFieldsJson = { [key: string]: unknown };
+
+export interface CampaignDisposition {
+  id: string;
+  campaignId: string;
+  callId: string;
+  code: string;
+  /** @nullable */
+  summaryText?: string | null;
+  extractedFieldsJson?: CampaignDispositionExtractedFieldsJson;
+  createdAt: string;
+}
+
+export interface CampaignCallback {
+  id: string;
+  campaignId: string;
+  campaignContactId: string;
+  /** @nullable */
+  callId?: string | null;
+  scheduledFor: string;
+  /** @nullable */
+  note?: string | null;
+  fulfilled: boolean;
+  createdAt: string;
+}
+
+export interface CampaignCallbackInput {
+  campaignContactId: string;
+  scheduledFor: string;
+  note?: string;
+  callId?: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -27,6 +213,8 @@ export const CallStatus = {
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED',
 } as const;
+
+export type CallLanguageSwitchesItem = { [key: string]: unknown };
 
 export interface Call {
   id: string;
@@ -58,20 +246,38 @@ export interface Call {
   /** @nullable */
   transferTarget?: string | null;
   followUpSent?: boolean;
-  /** @nullable */
+  /**
+     * ID of the persona that was active when this call started
+     * @nullable
+     */
   personaId?: string | null;
+  /**
+     * Fully-composed system prompt injected for this call
+     * @nullable
+     */
+  composedPrompt?: string | null;
   /** @nullable */
   personaName?: string | null;
   /** @nullable */
-  composedPrompt?: string | null;
+  personaVersion?: number | null;
   /** @nullable */
   connectOutcome?: string | null;
   interruptionCount?: number;
   escalationCount?: number;
   /** @nullable */
-  languageSwitches?: Record<string, unknown>[] | null;
+  languageSwitches?: CallLanguageSwitchesItem[] | null;
   /** @nullable */
   finalDisposition?: string | null;
+  /** @nullable */
+  disclosureText?: string | null;
+  /** @nullable */
+  disclosurePlayedAt?: string | null;
+  /** @nullable */
+  recordingConsentStatus?: string | null;
+  /** @nullable */
+  recordingConsentAt?: string | null;
+  /** @nullable */
+  complianceDecisionId?: string | null;
   createdAt: string;
 }
 
@@ -91,6 +297,200 @@ export interface DialInput {
   botId: string;
   maxRingSeconds?: number;
   maxAttempts?: number;
+}
+
+export interface InboundCallInput {
+  /** Caller's E.164 phone number */
+  from: string;
+  botId: string;
+  /**
+     * Dialed number (DID) that received the call
+     * @nullable
+     */
+  to?: string | null;
+}
+
+export interface DncEntry {
+  id: string;
+  tenantId: string;
+  phoneNumber: string;
+  source: string;
+  /** @nullable */
+  reason?: string | null;
+  addedAt: string;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  createdByUserId?: string | null;
+  createdAt: string;
+}
+
+export interface DncEntryInput {
+  phoneNumber: string;
+  source?: string;
+  reason?: string;
+  /** @nullable */
+  expiresAt?: string | null;
+}
+
+export interface DncCsvImportInput {
+  csv: string;
+}
+
+export type ConsentEntryConsentType = typeof ConsentEntryConsentType[keyof typeof ConsentEntryConsentType];
+
+
+export const ConsentEntryConsentType = {
+  VOICE_CALLING: 'VOICE_CALLING',
+  RECORDING: 'RECORDING',
+} as const;
+
+export type ConsentEntryStatus = typeof ConsentEntryStatus[keyof typeof ConsentEntryStatus];
+
+
+export const ConsentEntryStatus = {
+  GRANTED: 'GRANTED',
+  REVOKED: 'REVOKED',
+} as const;
+
+export interface ConsentEntry {
+  id: string;
+  tenantId: string;
+  phoneNumber: string;
+  consentType: ConsentEntryConsentType;
+  status: ConsentEntryStatus;
+  source: string;
+  capturedAt: string;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  evidence?: string | null;
+  /** @nullable */
+  actorUserId?: string | null;
+  createdAt: string;
+}
+
+export type ConsentInputConsentType = typeof ConsentInputConsentType[keyof typeof ConsentInputConsentType];
+
+
+export const ConsentInputConsentType = {
+  VOICE_CALLING: 'VOICE_CALLING',
+  RECORDING: 'RECORDING',
+} as const;
+
+export type ConsentInputStatus = typeof ConsentInputStatus[keyof typeof ConsentInputStatus];
+
+
+export const ConsentInputStatus = {
+  GRANTED: 'GRANTED',
+  REVOKED: 'REVOKED',
+} as const;
+
+export interface ConsentInput {
+  phoneNumber: string;
+  consentType: ConsentInputConsentType;
+  status: ConsentInputStatus;
+  source?: string;
+  evidence?: string;
+  /** @nullable */
+  expiresAt?: string | null;
+}
+
+export interface ComplianceProfile {
+  id: string;
+  tenantId: string;
+  jurisdictionCode: string;
+  displayName: string;
+  enabled: boolean;
+  timezone: string;
+  callingWindowStart: string;
+  callingWindowEnd: string;
+  allowedDays: string[];
+  holidays: string[];
+  requireConsent: boolean;
+  requireRecordingConsent: boolean;
+  /** @nullable */
+  mandatoryDisclosureText?: string | null;
+  blockOnHoliday: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceProfileInput {
+  displayName: string;
+  enabled?: boolean;
+  timezone: string;
+  callingWindowStart: string;
+  callingWindowEnd: string;
+  allowedDays: string[];
+  holidays?: string[];
+  requireConsent: boolean;
+  requireRecordingConsent: boolean;
+  /** @nullable */
+  mandatoryDisclosureText?: string | null;
+  blockOnHoliday: boolean;
+}
+
+export type ComplianceEvidenceDecision = typeof ComplianceEvidenceDecision[keyof typeof ComplianceEvidenceDecision];
+
+
+export const ComplianceEvidenceDecision = {
+  ALLOWED: 'ALLOWED',
+  BLOCKED: 'BLOCKED',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ComplianceEvidenceMetadataJson = { [key: string]: unknown } | null;
+
+export interface ComplianceEvidence {
+  id: string;
+  tenantId: string;
+  /** @nullable */
+  callId?: string | null;
+  botId: string;
+  phoneNumber: string;
+  direction: string;
+  decision: ComplianceEvidenceDecision;
+  reasonCode: string;
+  reason: string;
+  jurisdictionCode: string;
+  calledPartyTimezone: string;
+  /** @nullable */
+  disclosureText?: string | null;
+  recordingConsentRequired: boolean;
+  evaluatedAt: string;
+  /** @nullable */
+  metadataJson?: ComplianceEvidenceMetadataJson;
+  createdAt: string;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  rejected: number;
+  errors: string[];
+}
+
+export interface OptOutInput {
+  phoneNumber: string;
+  callId?: string;
+  reason?: string;
+}
+
+export type CallMediaEventInputEvent = typeof CallMediaEventInputEvent[keyof typeof CallMediaEventInputEvent];
+
+
+export const CallMediaEventInputEvent = {
+  DISCLOSURE_PLAYED: 'DISCLOSURE_PLAYED',
+  RECORDING_CONSENT_GRANTED: 'RECORDING_CONSENT_GRANTED',
+  RECORDING_CONSENT_DECLINED: 'RECORDING_CONSENT_DECLINED',
+} as const;
+
+export interface CallMediaEventInput {
+  event: CallMediaEventInputEvent;
+  evidence: string;
+  occurredAt?: string;
 }
 
 export type TransferInputMode = typeof TransferInputMode[keyof typeof TransferInputMode];
@@ -143,6 +543,43 @@ export interface HangupReasonStat {
   percentage: number;
 }
 
+export interface ConnectOutcomeStat {
+  outcome: string;
+  count: number;
+  percentage: number;
+}
+
+export interface LanguageMixStat {
+  language: string;
+  count: number;
+  percentage: number;
+}
+
+export interface CallIntelligencePoint {
+  date: string;
+  callsAnalyzed: number;
+  avgInterruptionsPerCall: number;
+  bargeInRate: number;
+  escalationRate: number;
+}
+
+export interface CallIntelligence {
+  totalAnalyzed: number;
+  avgInterruptionsPerCall: number;
+  avgEscalationsPerCall: number;
+  bargeInRate: number;
+  avgLanguageSwitchesPerCall: number;
+  timeSeries: CallIntelligencePoint[];
+}
+
+export type BotTelephonyType = typeof BotTelephonyType[keyof typeof BotTelephonyType];
+
+
+export const BotTelephonyType = {
+  webrtc: 'webrtc',
+  sip: 'sip',
+} as const;
+
 export type BotStatus = typeof BotStatus[keyof typeof BotStatus];
 
 
@@ -163,6 +600,18 @@ export const BotDirection = {
 
 export type BotDirectionConfig = { [key: string]: unknown } | null;
 
+export type BotLlmChainJsonItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type BotSttMapJson = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type BotTtsMapJson = { [key: string]: unknown } | null;
+
 export interface Bot {
   id: string;
   displayName: string;
@@ -171,6 +620,7 @@ export interface Bot {
   sipExtension: string;
   /** @nullable */
   sipDomain?: string | null;
+  telephonyType?: BotTelephonyType;
   /** @nullable */
   whatsappNumber?: string | null;
   status: BotStatus;
@@ -183,8 +633,22 @@ export interface Bot {
   endpointSilenceMs: number;
   backchannelThresholdMs: number;
   silenceRecoverySecs: number;
+  /** @nullable */
+  llmChainJson?: BotLlmChainJsonItem[] | null;
+  /** @nullable */
+  sttMapJson?: BotSttMapJson;
+  /** @nullable */
+  ttsMapJson?: BotTtsMapJson;
   createdAt: string;
 }
+
+export type BotInputTelephonyType = typeof BotInputTelephonyType[keyof typeof BotInputTelephonyType];
+
+
+export const BotInputTelephonyType = {
+  webrtc: 'webrtc',
+  sip: 'sip',
+} as const;
 
 export type BotInputDirection = typeof BotInputDirection[keyof typeof BotInputDirection];
 
@@ -196,6 +660,18 @@ export const BotInputDirection = {
 
 export type BotInputDirectionConfig = { [key: string]: unknown };
 
+export type BotInputLlmChainJsonItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type BotInputSttMapJson = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type BotInputTtsMapJson = { [key: string]: unknown } | null;
+
 export interface BotInput {
   displayName: string;
   /** @nullable */
@@ -203,6 +679,7 @@ export interface BotInput {
   sipExtension: string;
   /** @nullable */
   sipDomain?: string | null;
+  telephonyType?: BotInputTelephonyType;
   /** @nullable */
   whatsappNumber?: string | null;
   direction?: BotInputDirection;
@@ -213,7 +690,21 @@ export interface BotInput {
   endpointSilenceMs?: number;
   backchannelThresholdMs?: number;
   silenceRecoverySecs?: number;
+  /** @nullable */
+  llmChainJson?: BotInputLlmChainJsonItem[] | null;
+  /** @nullable */
+  sttMapJson?: BotInputSttMapJson;
+  /** @nullable */
+  ttsMapJson?: BotInputTtsMapJson;
 }
+
+export type BotUpdateTelephonyType = typeof BotUpdateTelephonyType[keyof typeof BotUpdateTelephonyType];
+
+
+export const BotUpdateTelephonyType = {
+  webrtc: 'webrtc',
+  sip: 'sip',
+} as const;
 
 export type BotUpdateStatus = typeof BotUpdateStatus[keyof typeof BotUpdateStatus];
 
@@ -235,6 +726,18 @@ export const BotUpdateDirection = {
 
 export type BotUpdateDirectionConfig = { [key: string]: unknown };
 
+export type BotUpdateLlmChainJsonItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type BotUpdateSttMapJson = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type BotUpdateTtsMapJson = { [key: string]: unknown } | null;
+
 export interface BotUpdate {
   displayName?: string;
   /** @nullable */
@@ -242,6 +745,7 @@ export interface BotUpdate {
   sipExtension?: string;
   /** @nullable */
   sipDomain?: string | null;
+  telephonyType?: BotUpdateTelephonyType;
   /** @nullable */
   whatsappNumber?: string | null;
   status?: BotUpdateStatus;
@@ -253,6 +757,401 @@ export interface BotUpdate {
   endpointSilenceMs?: number;
   backchannelThresholdMs?: number;
   silenceRecoverySecs?: number;
+  /** @nullable */
+  llmChainJson?: BotUpdateLlmChainJsonItem[] | null;
+  /** @nullable */
+  sttMapJson?: BotUpdateSttMapJson;
+  /** @nullable */
+  ttsMapJson?: BotUpdateTtsMapJson;
+}
+
+export type SipConfigTransport = typeof SipConfigTransport[keyof typeof SipConfigTransport];
+
+
+export const SipConfigTransport = {
+  udp: 'udp',
+  tcp: 'tcp',
+  tls: 'tls',
+  wss: 'wss',
+} as const;
+
+export type SipConfigCodecsItem = typeof SipConfigCodecsItem[keyof typeof SipConfigCodecsItem];
+
+
+export const SipConfigCodecsItem = {
+  PCMU: 'PCMU',
+  PCMA: 'PCMA',
+  G722: 'G722',
+  OPUS: 'OPUS',
+} as const;
+
+export type SipConfigDtmfMode = typeof SipConfigDtmfMode[keyof typeof SipConfigDtmfMode];
+
+
+export const SipConfigDtmfMode = {
+  rfc2833: 'rfc2833',
+  sip_info: 'sip_info',
+  inband: 'inband',
+} as const;
+
+export type SipConfigSrtpMode = typeof SipConfigSrtpMode[keyof typeof SipConfigSrtpMode];
+
+
+export const SipConfigSrtpMode = {
+  disabled: 'disabled',
+  optional: 'optional',
+  required: 'required',
+} as const;
+
+export type SipConfigNatTraversal = typeof SipConfigNatTraversal[keyof typeof SipConfigNatTraversal];
+
+
+export const SipConfigNatTraversal = {
+  none: 'none',
+  stun: 'stun',
+  force_rport: 'force_rport',
+} as const;
+
+export type SipConfigRegistrationState = typeof SipConfigRegistrationState[keyof typeof SipConfigRegistrationState];
+
+
+export const SipConfigRegistrationState = {
+  unregistered: 'unregistered',
+  registering: 'registering',
+  registered: 'registered',
+  failed: 'failed',
+} as const;
+
+export interface SipConfig {
+  id: string;
+  botId: string;
+  enabled: boolean;
+  /** @nullable */
+  sipDomain?: string | null;
+  registrarHost: string;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  registrarPort: number;
+  transport: SipConfigTransport;
+  extension: string;
+  authUsername: string;
+  passwordIsSet: boolean;
+  /** @nullable */
+  passwordMasked?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  callerIdNumber?: string | null;
+  /** @nullable */
+  outboundProxyHost?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     * @nullable
+     */
+  outboundProxyPort?: number | null;
+  /**
+     * @minimum 60
+     * @maximum 86400
+     */
+  registerExpirySeconds: number;
+  /**
+     * @minimum 1
+     * @maximum 86400
+     */
+  keepaliveIntervalSeconds: number;
+  /** @minItems 1 */
+  codecs: SipConfigCodecsItem[];
+  dtmfMode: SipConfigDtmfMode;
+  srtpMode: SipConfigSrtpMode;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  rtpPortMin: number;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  rtpPortMax: number;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  ptimeMs: number;
+  natTraversal: SipConfigNatTraversal;
+  /** @nullable */
+  stunServer?: string | null;
+  /** @nullable */
+  localBindIp?: string | null;
+  /** @nullable */
+  externalIp?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 10000
+     */
+  maxConcurrentCalls: number;
+  inboundDids: string[];
+  /**
+     * @minimum 0
+     * @maximum 120000
+     */
+  answerDelayMs: number;
+  recordCalls: boolean;
+  outboundEnabled: boolean;
+  /** @nullable */
+  outboundPrefix?: string | null;
+  allowSelfSigned: boolean;
+  debugLogging: boolean;
+  registrationState: SipConfigRegistrationState;
+  /** @nullable */
+  lastRegisteredAt?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  activeCalls?: number;
+}
+
+export type SipConfigInputTransport = typeof SipConfigInputTransport[keyof typeof SipConfigInputTransport];
+
+
+export const SipConfigInputTransport = {
+  udp: 'udp',
+  tcp: 'tcp',
+  tls: 'tls',
+  wss: 'wss',
+} as const;
+
+export type SipConfigInputCodecsItem = typeof SipConfigInputCodecsItem[keyof typeof SipConfigInputCodecsItem];
+
+
+export const SipConfigInputCodecsItem = {
+  PCMU: 'PCMU',
+  PCMA: 'PCMA',
+  G722: 'G722',
+  OPUS: 'OPUS',
+} as const;
+
+export type SipConfigInputDtmfMode = typeof SipConfigInputDtmfMode[keyof typeof SipConfigInputDtmfMode];
+
+
+export const SipConfigInputDtmfMode = {
+  rfc2833: 'rfc2833',
+  sip_info: 'sip_info',
+  inband: 'inband',
+} as const;
+
+export type SipConfigInputSrtpMode = typeof SipConfigInputSrtpMode[keyof typeof SipConfigInputSrtpMode];
+
+
+export const SipConfigInputSrtpMode = {
+  disabled: 'disabled',
+  optional: 'optional',
+  required: 'required',
+} as const;
+
+export type SipConfigInputNatTraversal = typeof SipConfigInputNatTraversal[keyof typeof SipConfigInputNatTraversal];
+
+
+export const SipConfigInputNatTraversal = {
+  none: 'none',
+  stun: 'stun',
+  force_rport: 'force_rport',
+} as const;
+
+export interface SipConfigInput {
+  enabled?: boolean;
+  /** @nullable */
+  sipDomain?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 253
+     */
+  registrarHost: string;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  registrarPort?: number;
+  transport?: SipConfigInputTransport;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  extension: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  authUsername: string;
+  /**
+     * Blank or omitted retains the existing password
+     * @maxLength 1024
+     */
+  password?: string;
+  /** @nullable */
+  displayName?: string | null;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  callerIdNumber?: string | null;
+  /**
+     * @maxLength 253
+     * @nullable
+     */
+  outboundProxyHost?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     * @nullable
+     */
+  outboundProxyPort?: number | null;
+  /**
+     * @minimum 60
+     * @maximum 86400
+     */
+  registerExpirySeconds?: number;
+  /**
+     * @minimum 1
+     * @maximum 86400
+     */
+  keepaliveIntervalSeconds?: number;
+  /** @minItems 1 */
+  codecs?: SipConfigInputCodecsItem[];
+  dtmfMode?: SipConfigInputDtmfMode;
+  srtpMode?: SipConfigInputSrtpMode;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  rtpPortMin?: number;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  rtpPortMax?: number;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  ptimeMs?: number;
+  natTraversal?: SipConfigInputNatTraversal;
+  /**
+     * @maxLength 253
+     * @nullable
+     */
+  stunServer?: string | null;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  localBindIp?: string | null;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  externalIp?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 10000
+     */
+  maxConcurrentCalls?: number;
+  inboundDids?: string[];
+  /**
+     * @minimum 0
+     * @maximum 120000
+     */
+  answerDelayMs?: number;
+  recordCalls?: boolean;
+  outboundEnabled?: boolean;
+  /**
+     * @maxLength 32
+     * @nullable
+     */
+  outboundPrefix?: string | null;
+  allowSelfSigned?: boolean;
+  debugLogging?: boolean;
+}
+
+export interface CallDtmfInput {
+  /** @pattern ^[0-9A-D*#]$ */
+  digit: string;
+}
+
+export interface SipTestCallInput {
+  /** @pattern ^\+[1-9][0-9]{7,14}$ */
+  to: string;
+}
+
+export interface SipActionResult {
+  accepted: boolean;
+  /** @nullable */
+  requestId?: string | null;
+  /** @nullable */
+  callId?: string | null;
+}
+
+export type SipStatusRegistrationState = typeof SipStatusRegistrationState[keyof typeof SipStatusRegistrationState];
+
+
+export const SipStatusRegistrationState = {
+  unregistered: 'unregistered',
+  registering: 'registering',
+  registered: 'registered',
+  failed: 'failed',
+} as const;
+
+export interface SipStatus {
+  registrationState: SipStatusRegistrationState;
+  /** @nullable */
+  lastRegisteredAt?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  activeCalls: number;
+}
+
+export type SipEventLevel = typeof SipEventLevel[keyof typeof SipEventLevel];
+
+
+export const SipEventLevel = {
+  debug: 'debug',
+  info: 'info',
+  warn: 'warn',
+  error: 'error',
+} as const;
+
+/**
+ * @nullable
+ */
+export type SipEventDirection = typeof SipEventDirection[keyof typeof SipEventDirection] | null;
+
+
+export const SipEventDirection = {
+  inbound: 'inbound',
+  outbound: 'outbound',
+} as const;
+
+export interface SipEvent {
+  id: string;
+  botId: string;
+  timestamp: string;
+  level: SipEventLevel;
+  /** @nullable */
+  direction?: SipEventDirection;
+  /** @nullable */
+  methodResponse?: string | null;
+  summary: string;
+  /** @nullable */
+  rawSnippet?: string | null;
+}
+
+export interface SipHealth {
+  enabled: boolean;
+  reachable: boolean;
+  /** @nullable */
+  error?: string | null;
 }
 
 export type PersonaConfigCharacter = typeof PersonaConfigCharacter[keyof typeof PersonaConfigCharacter];
@@ -611,6 +1510,46 @@ export type ListCallsDirection = typeof ListCallsDirection[keyof typeof ListCall
 export const ListCallsDirection = {
   INBOUND: 'INBOUND',
   OUTBOUND: 'OUTBOUND',
+} as const;
+
+export type ListDncEntriesParams = {
+search?: string;
+};
+
+export type ListConsentLedgerParams = {
+search?: string;
+};
+
+export type RecordInCallOptOut201 = { [key: string]: unknown };
+
+export type ListCampaignDispositionsParams = {
+format?: ListCampaignDispositionsFormat;
+};
+
+export type ListCampaignDispositionsFormat = typeof ListCampaignDispositionsFormat[keyof typeof ListCampaignDispositionsFormat];
+
+
+export const ListCampaignDispositionsFormat = {
+  csv: 'csv',
+} as const;
+
+export type ListSipEventsParams = {
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+level?: ListSipEventsLevel;
+};
+
+export type ListSipEventsLevel = typeof ListSipEventsLevel[keyof typeof ListSipEventsLevel];
+
+
+export const ListSipEventsLevel = {
+  debug: 'debug',
+  info: 'info',
+  warn: 'warn',
+  error: 'error',
 } as const;
 
 export type ListMemoryEntriesParams = {

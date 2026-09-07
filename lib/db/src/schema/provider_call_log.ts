@@ -33,6 +33,8 @@ export const providerCallLogTable = mysqlTable("provider_call_log", {
 
   inputTokens: int("input_tokens"),
   outputTokens: int("output_tokens"),
+  /** Latest quota snapshot parsed from provider response headers. */
+  rateLimitJson: text("rate_limit_json"),
   errorMessage: text("error_message"),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),

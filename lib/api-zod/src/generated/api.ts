@@ -49,14 +49,20 @@ export const ListCallsResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
-  "personaId": zod.string().nullish(),
+  "personaId": zod.string().nullish().describe('ID of the persona that was active when this call started'),
+  "composedPrompt": zod.string().nullish().describe('Fully-composed system prompt injected for this call'),
   "personaName": zod.string().nullish(),
-  "composedPrompt": zod.string().nullish(),
+  "personaVersion": zod.number().nullish(),
   "connectOutcome": zod.string().nullish(),
   "interruptionCount": zod.number().optional(),
   "escalationCount": zod.number().optional(),
   "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   "finalDisposition": zod.string().nullish(),
+  "disclosureText": zod.string().nullish(),
+  "disclosurePlayedAt": zod.coerce.date().nullish(),
+  "recordingConsentStatus": zod.string().nullish(),
+  "recordingConsentAt": zod.coerce.date().nullish(),
+  "complianceDecisionId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -75,6 +81,31 @@ export const DialCallBody = zod.object({
   "botId": zod.string(),
   "maxRingSeconds": zod.number().default(dialCallBodyMaxRingSecondsDefault),
   "maxAttempts": zod.number().default(dialCallBodyMaxAttemptsDefault)
+})
+
+
+/**
+ * @summary Initiate an outbound call (compatibility alias for dial)
+ */
+export const outboundCallBodyMaxRingSecondsDefault = 30;
+export const outboundCallBodyMaxAttemptsDefault = 3;
+
+export const OutboundCallBody = zod.object({
+  "to": zod.string().describe('E.164 phone number'),
+  "from": zod.string().nullish().describe('Caller ID (E.164)'),
+  "botId": zod.string(),
+  "maxRingSeconds": zod.number().default(outboundCallBodyMaxRingSecondsDefault),
+  "maxAttempts": zod.number().default(outboundCallBodyMaxAttemptsDefault)
+})
+
+
+/**
+ * @summary Webhook — incoming call arrives; stamps active persona at call-start
+ */
+export const ReceiveInboundCallBody = zod.object({
+  "from": zod.string().describe('Caller\'s E.164 phone number'),
+  "botId": zod.string(),
+  "to": zod.string().nullish().describe('Dialed number (DID) that received the call')
 })
 
 
@@ -103,14 +134,20 @@ export const GetCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
-  "personaId": zod.string().nullish(),
+  "personaId": zod.string().nullish().describe('ID of the persona that was active when this call started'),
+  "composedPrompt": zod.string().nullish().describe('Fully-composed system prompt injected for this call'),
   "personaName": zod.string().nullish(),
-  "composedPrompt": zod.string().nullish(),
+  "personaVersion": zod.number().nullish(),
   "connectOutcome": zod.string().nullish(),
   "interruptionCount": zod.number().optional(),
   "escalationCount": zod.number().optional(),
   "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   "finalDisposition": zod.string().nullish(),
+  "disclosureText": zod.string().nullish(),
+  "disclosurePlayedAt": zod.coerce.date().nullish(),
+  "recordingConsentStatus": zod.string().nullish(),
+  "recordingConsentAt": zod.coerce.date().nullish(),
+  "complianceDecisionId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -140,14 +177,20 @@ export const HangupCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
-  "personaId": zod.string().nullish(),
+  "personaId": zod.string().nullish().describe('ID of the persona that was active when this call started'),
+  "composedPrompt": zod.string().nullish().describe('Fully-composed system prompt injected for this call'),
   "personaName": zod.string().nullish(),
-  "composedPrompt": zod.string().nullish(),
+  "personaVersion": zod.number().nullish(),
   "connectOutcome": zod.string().nullish(),
   "interruptionCount": zod.number().optional(),
   "escalationCount": zod.number().optional(),
   "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   "finalDisposition": zod.string().nullish(),
+  "disclosureText": zod.string().nullish(),
+  "disclosurePlayedAt": zod.coerce.date().nullish(),
+  "recordingConsentStatus": zod.string().nullish(),
+  "recordingConsentAt": zod.coerce.date().nullish(),
+  "complianceDecisionId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -188,15 +231,42 @@ export const TransferCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
-  "personaId": zod.string().nullish(),
+  "personaId": zod.string().nullish().describe('ID of the persona that was active when this call started'),
+  "composedPrompt": zod.string().nullish().describe('Fully-composed system prompt injected for this call'),
   "personaName": zod.string().nullish(),
-  "composedPrompt": zod.string().nullish(),
+  "personaVersion": zod.number().nullish(),
   "connectOutcome": zod.string().nullish(),
   "interruptionCount": zod.number().optional(),
   "escalationCount": zod.number().optional(),
   "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   "finalDisposition": zod.string().nullish(),
+  "disclosureText": zod.string().nullish(),
+  "disclosurePlayedAt": zod.coerce.date().nullish(),
+  "recordingConsentStatus": zod.string().nullish(),
+  "recordingConsentAt": zod.coerce.date().nullish(),
+  "complianceDecisionId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Send one DTMF digit to an owned active SIP call
+ */
+export const SendCallDtmfParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const sendCallDtmfBodyDigitRegExp = new RegExp('^[0-9A-D\*#]$');
+
+
+export const SendCallDtmfBody = zod.object({
+  "digit": zod.string().regex(sendCallDtmfBodyDigitRegExp)
+})
+
+export const SendCallDtmfResponse = zod.object({
+  "accepted": zod.boolean(),
+  "requestId": zod.string().nullish(),
+  "callId": zod.string().nullish()
 })
 
 
@@ -232,25 +302,574 @@ export const ConferenceCallResponse = zod.object({
   "summary": zod.string().nullish(),
   "transferTarget": zod.string().nullish(),
   "followUpSent": zod.boolean().optional(),
-  "personaId": zod.string().nullish(),
+  "personaId": zod.string().nullish().describe('ID of the persona that was active when this call started'),
+  "composedPrompt": zod.string().nullish().describe('Fully-composed system prompt injected for this call'),
   "personaName": zod.string().nullish(),
-  "composedPrompt": zod.string().nullish(),
+  "personaVersion": zod.number().nullish(),
   "connectOutcome": zod.string().nullish(),
   "interruptionCount": zod.number().optional(),
   "escalationCount": zod.number().optional(),
   "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   "finalDisposition": zod.string().nullish(),
+  "disclosureText": zod.string().nullish(),
+  "disclosurePlayedAt": zod.coerce.date().nullish(),
+  "recordingConsentStatus": zod.string().nullish(),
+  "recordingConsentAt": zod.coerce.date().nullish(),
+  "complianceDecisionId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
+
 /**
- * @summary Webhook — incoming call arrives; stamps active persona at call-start
+ * @summary Persist an authenticated telephony disclosure or recording-consent event
  */
-export const ReceiveInboundCallBody = zod.object({
-  "from": zod.string().describe("Caller's E.164 phone number"),
-  "botId": zod.string(),
-  "to": zod.string().nullish().describe("Dialed number (DID) that received the call")
+export const RecordCallMediaEventParams = zod.object({
+  "id": zod.coerce.string()
 })
+
+export const RecordCallMediaEventBody = zod.object({
+  "event": zod.enum(['DISCLOSURE_PLAYED', 'RECORDING_CONSENT_GRANTED', 'RECORDING_CONSENT_DECLINED']),
+  "evidence": zod.string(),
+  "occurredAt": zod.coerce.date().optional()
+})
+
+export const RecordCallMediaEventResponse = zod.object({
+  "id": zod.string(),
+  "botId": zod.string(),
+  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
+  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
+  "customerNumber": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "endedAt": zod.coerce.date().nullish(),
+  "durationSeconds": zod.number().nullish(),
+  "hangupReason": zod.string().nullish(),
+  "sipCode": zod.number().nullish(),
+  "amdResult": zod.string().nullish(),
+  "languageDetected": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "transferTarget": zod.string().nullish(),
+  "followUpSent": zod.boolean().optional(),
+  "personaId": zod.string().nullish().describe('ID of the persona that was active when this call started'),
+  "composedPrompt": zod.string().nullish().describe('Fully-composed system prompt injected for this call'),
+  "personaName": zod.string().nullish(),
+  "personaVersion": zod.number().nullish(),
+  "connectOutcome": zod.string().nullish(),
+  "interruptionCount": zod.number().optional(),
+  "escalationCount": zod.number().optional(),
+  "languageSwitches": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "finalDisposition": zod.string().nullish(),
+  "disclosureText": zod.string().nullish(),
+  "disclosurePlayedAt": zod.coerce.date().nullish(),
+  "recordingConsentStatus": zod.string().nullish(),
+  "recordingConsentAt": zod.coerce.date().nullish(),
+  "complianceDecisionId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List tenant do-not-call entries
+ */
+export const ListDncEntriesQueryParams = zod.object({
+  "search": zod.coerce.string().optional()
+})
+
+export const ListDncEntriesResponseItem = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "phoneNumber": zod.string(),
+  "source": zod.string(),
+  "reason": zod.string().nullish(),
+  "addedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "createdByUserId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListDncEntriesResponse = zod.array(ListDncEntriesResponseItem)
+
+
+/**
+ * @summary Add a tenant do-not-call entry
+ */
+export const CreateDncEntryBody = zod.object({
+  "phoneNumber": zod.string(),
+  "source": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "expiresAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Remove a tenant do-not-call entry
+ */
+export const DeleteDncEntryParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteDncEntryResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "phoneNumber": zod.string(),
+  "source": zod.string(),
+  "reason": zod.string().nullish(),
+  "addedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "createdByUserId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Import DNC phone numbers from CSV
+ */
+export const ImportDncCsvBody = zod.object({
+  "csv": zod.string()
+})
+
+export const ImportDncCsvResponse = zod.object({
+  "imported": zod.number(),
+  "rejected": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
+ * @summary List tenant consent events
+ */
+export const ListConsentLedgerQueryParams = zod.object({
+  "search": zod.coerce.string().optional()
+})
+
+export const ListConsentLedgerResponseItem = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "phoneNumber": zod.string(),
+  "consentType": zod.enum(['VOICE_CALLING', 'RECORDING']),
+  "status": zod.enum(['GRANTED', 'REVOKED']),
+  "source": zod.string(),
+  "capturedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "evidence": zod.string().nullish(),
+  "actorUserId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListConsentLedgerResponse = zod.array(ListConsentLedgerResponseItem)
+
+
+/**
+ * @summary Record a grant or revocation consent event
+ */
+export const RecordConsentBody = zod.object({
+  "phoneNumber": zod.string(),
+  "consentType": zod.enum(['VOICE_CALLING', 'RECORDING']),
+  "status": zod.enum(['GRANTED', 'REVOKED']),
+  "source": zod.string().optional(),
+  "evidence": zod.string().optional(),
+  "expiresAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Revoke a consent ledger entry
+ */
+export const RevokeConsentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary List tenant jurisdiction profiles
+ */
+export const ListComplianceProfilesResponseItem = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "jurisdictionCode": zod.string(),
+  "displayName": zod.string(),
+  "enabled": zod.boolean(),
+  "timezone": zod.string(),
+  "callingWindowStart": zod.string(),
+  "callingWindowEnd": zod.string(),
+  "allowedDays": zod.array(zod.string()),
+  "holidays": zod.array(zod.string()),
+  "requireConsent": zod.boolean(),
+  "requireRecordingConsent": zod.boolean(),
+  "mandatoryDisclosureText": zod.string().nullish(),
+  "blockOnHoliday": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListComplianceProfilesResponse = zod.array(ListComplianceProfilesResponseItem)
+
+
+/**
+ * @summary Create or update a jurisdiction profile
+ */
+export const UpdateComplianceProfileParams = zod.object({
+  "jurisdictionCode": zod.coerce.string()
+})
+
+export const UpdateComplianceProfileBody = zod.object({
+  "displayName": zod.string(),
+  "enabled": zod.boolean().optional(),
+  "timezone": zod.string(),
+  "callingWindowStart": zod.string(),
+  "callingWindowEnd": zod.string(),
+  "allowedDays": zod.array(zod.string()),
+  "holidays": zod.array(zod.string()).optional(),
+  "requireConsent": zod.boolean(),
+  "requireRecordingConsent": zod.boolean(),
+  "mandatoryDisclosureText": zod.string().nullish(),
+  "blockOnHoliday": zod.boolean()
+})
+
+export const UpdateComplianceProfileResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "jurisdictionCode": zod.string(),
+  "displayName": zod.string(),
+  "enabled": zod.boolean(),
+  "timezone": zod.string(),
+  "callingWindowStart": zod.string(),
+  "callingWindowEnd": zod.string(),
+  "allowedDays": zod.array(zod.string()),
+  "holidays": zod.array(zod.string()),
+  "requireConsent": zod.boolean(),
+  "requireRecordingConsent": zod.boolean(),
+  "mandatoryDisclosureText": zod.string().nullish(),
+  "blockOnHoliday": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List compliance decision evidence
+ */
+export const ListComplianceEvidenceResponseItem = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "callId": zod.string().nullish(),
+  "botId": zod.string(),
+  "phoneNumber": zod.string(),
+  "direction": zod.string(),
+  "decision": zod.enum(['ALLOWED', 'BLOCKED']),
+  "reasonCode": zod.string(),
+  "reason": zod.string(),
+  "jurisdictionCode": zod.string(),
+  "calledPartyTimezone": zod.string(),
+  "disclosureText": zod.string().nullish(),
+  "recordingConsentRequired": zod.boolean(),
+  "evaluatedAt": zod.coerce.date(),
+  "metadataJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListComplianceEvidenceResponse = zod.array(ListComplianceEvidenceResponseItem)
+
+
+/**
+ * @summary Add a caller to DNC during a live call
+ */
+export const RecordInCallOptOutBody = zod.object({
+  "phoneNumber": zod.string(),
+  "callId": zod.string().optional(),
+  "reason": zod.string().optional()
+})
+
+
+/**
+ * @summary List tenant campaigns with queue metrics
+ */
+export const listCampaignsResponseConcurrencyCapMax = 50;
+
+
+
+export const ListCampaignsResponseItem = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "botId": zod.string(),
+  "name": zod.string(),
+  "objectivePrompt": zod.string().optional(),
+  "status": zod.enum(['DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED', 'COMPLETED', 'STOPPED']),
+  "scheduleJson": zod.record(zod.string(), zod.unknown()),
+  "callingWindowOverride": zod.record(zod.string(), zod.unknown()).nullish(),
+  "concurrencyCap": zod.number().min(1).max(listCampaignsResponseConcurrencyCapMax),
+  "retryPolicyJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "successFieldsJson": zod.array(zod.string()).optional(),
+  "cliNumber": zod.string().nullish(),
+  "voicemailScript": zod.string().nullish(),
+  "abVariantOf": zod.string().nullish(),
+  "metrics": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
+
+
+/**
+ * @summary Create an outbound campaign draft
+ */
+export const createCampaignBodyNameMin = 2;
+export const createCampaignBodyNameMax = 120;
+
+export const createCampaignBodyConcurrencyCapMax = 50;
+
+
+
+export const CreateCampaignBody = zod.object({
+  "name": zod.string().min(createCampaignBodyNameMin).max(createCampaignBodyNameMax),
+  "botId": zod.string(),
+  "objectivePrompt": zod.string().optional(),
+  "scheduleJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "callingWindowOverride": zod.record(zod.string(), zod.unknown()).nullish(),
+  "concurrencyCap": zod.number().min(1).max(createCampaignBodyConcurrencyCapMax).optional(),
+  "retryPolicyJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "successFieldsJson": zod.array(zod.string()).optional(),
+  "cliNumber": zod.string().nullish(),
+  "voicemailScript": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get a campaign and queue metrics
+ */
+export const GetCampaignParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getCampaignResponseConcurrencyCapMax = 50;
+
+
+
+export const GetCampaignResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "botId": zod.string(),
+  "name": zod.string(),
+  "objectivePrompt": zod.string().optional(),
+  "status": zod.enum(['DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED', 'COMPLETED', 'STOPPED']),
+  "scheduleJson": zod.record(zod.string(), zod.unknown()),
+  "callingWindowOverride": zod.record(zod.string(), zod.unknown()).nullish(),
+  "concurrencyCap": zod.number().min(1).max(getCampaignResponseConcurrencyCapMax),
+  "retryPolicyJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "successFieldsJson": zod.array(zod.string()).optional(),
+  "cliNumber": zod.string().nullish(),
+  "voicemailScript": zod.string().nullish(),
+  "abVariantOf": zod.string().nullish(),
+  "metrics": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update campaign settings or make a valid lifecycle transition
+ */
+export const UpdateCampaignParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateCampaignBodyOneNameMin = 2;
+export const updateCampaignBodyOneNameMax = 120;
+
+export const updateCampaignBodyOneConcurrencyCapMax = 50;
+
+
+
+export const UpdateCampaignBody = zod.object({
+  "name": zod.string().min(updateCampaignBodyOneNameMin).max(updateCampaignBodyOneNameMax),
+  "botId": zod.string(),
+  "objectivePrompt": zod.string().optional(),
+  "scheduleJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "callingWindowOverride": zod.record(zod.string(), zod.unknown()).nullish(),
+  "concurrencyCap": zod.number().min(1).max(updateCampaignBodyOneConcurrencyCapMax).optional(),
+  "retryPolicyJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "successFieldsJson": zod.array(zod.string()).optional(),
+  "cliNumber": zod.string().nullish(),
+  "voicemailScript": zod.string().nullish()
+}).and(zod.object({
+  "status": zod.enum(['DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED', 'COMPLETED', 'STOPPED']).optional()
+}))
+
+export const updateCampaignResponseConcurrencyCapMax = 50;
+
+
+
+export const UpdateCampaignResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "botId": zod.string(),
+  "name": zod.string(),
+  "objectivePrompt": zod.string().optional(),
+  "status": zod.enum(['DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED', 'COMPLETED', 'STOPPED']),
+  "scheduleJson": zod.record(zod.string(), zod.unknown()),
+  "callingWindowOverride": zod.record(zod.string(), zod.unknown()).nullish(),
+  "concurrencyCap": zod.number().min(1).max(updateCampaignResponseConcurrencyCapMax),
+  "retryPolicyJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "successFieldsJson": zod.array(zod.string()).optional(),
+  "cliNumber": zod.string().nullish(),
+  "voicemailScript": zod.string().nullish(),
+  "abVariantOf": zod.string().nullish(),
+  "metrics": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Permanently stop a campaign; stopped campaigns cannot be restarted
+ */
+export const StopCampaignParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const stopCampaignResponseConcurrencyCapMax = 50;
+
+
+
+export const StopCampaignResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "botId": zod.string(),
+  "name": zod.string(),
+  "objectivePrompt": zod.string().optional(),
+  "status": zod.enum(['DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED', 'COMPLETED', 'STOPPED']),
+  "scheduleJson": zod.record(zod.string(), zod.unknown()),
+  "callingWindowOverride": zod.record(zod.string(), zod.unknown()).nullish(),
+  "concurrencyCap": zod.number().min(1).max(stopCampaignResponseConcurrencyCapMax),
+  "retryPolicyJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "successFieldsJson": zod.array(zod.string()).optional(),
+  "cliNumber": zod.string().nullish(),
+  "voicemailScript": zod.string().nullish(),
+  "abVariantOf": zod.string().nullish(),
+  "metrics": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Create a DRAFT A/B variant of a campaign
+ */
+export const CloneCampaignParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const cloneCampaignBodyCopyContactsDefault = false;
+
+export const CloneCampaignBody = zod.object({
+  "name": zod.string().optional(),
+  "copyContacts": zod.boolean().default(cloneCampaignBodyCopyContactsDefault)
+})
+
+
+/**
+ * @summary Preview or import CSV contacts after column mapping and compliance evaluation
+ */
+export const ImportCampaignContactsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const importCampaignContactsBodyPreviewOnlyDefault = false;
+
+export const ImportCampaignContactsBody = zod.object({
+  "csv": zod.string(),
+  "phoneColumn": zod.string(),
+  "variableColumns": zod.array(zod.string()).optional(),
+  "mapping": zod.record(zod.string(), zod.string()).optional(),
+  "previewOnly": zod.boolean().default(importCampaignContactsBodyPreviewOnlyDefault)
+})
+
+export const ImportCampaignContactsResponse = zod.object({
+  "headers": zod.array(zod.string()),
+  "total": zod.number(),
+  "allowed": zod.number(),
+  "blocked": zod.number(),
+  "rows": zod.array(zod.record(zod.string(), zod.unknown()))
+})
+
+
+/**
+ * @summary List campaign queue contacts
+ */
+export const ListCampaignContactsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ListCampaignContactsResponseItem = zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "phoneE164": zod.string(),
+  "variablesJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "state": zod.enum(['PENDING', 'IN_FLIGHT', 'BLOCKED', 'DONE']),
+  "attempts": zod.number(),
+  "nextAttemptAt": zod.coerce.date().optional(),
+  "lastDisposition": zod.string().nullish(),
+  "blockReason": zod.string().nullish(),
+  "callId": zod.string().nullish()
+})
+export const ListCampaignContactsResponse = zod.array(ListCampaignContactsResponseItem)
+
+
+/**
+ * @summary Monitor dispositions or export them as CSV
+ */
+export const ListCampaignDispositionsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ListCampaignDispositionsQueryParams = zod.object({
+  "format": zod.enum(['csv']).optional()
+})
+
+export const ListCampaignDispositionsResponseItem = zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "callId": zod.string(),
+  "code": zod.string(),
+  "summaryText": zod.string().nullish(),
+  "extractedFieldsJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCampaignDispositionsResponse = zod.array(ListCampaignDispositionsResponseItem)
+
+
+/**
+ * @summary List scheduled callbacks for a campaign
+ */
+export const ListCampaignCallbacksParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ListCampaignCallbacksResponseItem = zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "campaignContactId": zod.string(),
+  "callId": zod.string().nullish(),
+  "scheduledFor": zod.coerce.date(),
+  "note": zod.string().nullish(),
+  "fulfilled": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCampaignCallbacksResponse = zod.array(ListCampaignCallbacksResponseItem)
+
+
+/**
+ * @summary Schedule a callback for a campaign contact
+ */
+export const CreateCampaignCallbackParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const CreateCampaignCallbackBody = zod.object({
+  "campaignContactId": zod.string(),
+  "scheduledFor": zod.coerce.date(),
+  "note": zod.string().optional(),
+  "callId": zod.string().optional()
+})
+
+
 /**
  * @summary Dashboard overview statistics
  */
@@ -289,7 +908,7 @@ export const GetHangupReasonsResponse = zod.array(GetHangupReasonsResponseItem)
 
 
 /**
- * @summary Distribution of connect outcomes (AMD classification results)
+ * @summary Distribution of call connection outcomes
  */
 export const GetConnectOutcomesResponseItem = zod.object({
   "outcome": zod.string(),
@@ -300,7 +919,7 @@ export const GetConnectOutcomesResponse = zod.array(GetConnectOutcomesResponseIt
 
 
 /**
- * @summary Language mix distribution across all calls
+ * @summary Distribution of detected languages
  */
 export const GetLanguageMixResponseItem = zod.object({
   "language": zod.string(),
@@ -311,20 +930,28 @@ export const GetLanguageMixResponse = zod.array(GetLanguageMixResponseItem)
 
 
 /**
- * @summary Aggregate call intelligence metrics (barge-in, interruption, escalation)
+ * @summary Call interruption and escalation metrics
  */
 export const GetCallIntelligenceResponse = zod.object({
-  "avgInterruptions": zod.number(),
-  "avgEscalations": zod.number(),
+  "totalAnalyzed": zod.number(),
+  "avgInterruptionsPerCall": zod.number(),
+  "avgEscalationsPerCall": zod.number(),
   "bargeInRate": zod.number(),
-  "totalLanguageSwitches": zod.number(),
-  "totalCallsAnalyzed": zod.number()
+  "avgLanguageSwitchesPerCall": zod.number(),
+  "timeSeries": zod.array(zod.object({
+  "date": zod.string(),
+  "callsAnalyzed": zod.number(),
+  "avgInterruptionsPerCall": zod.number(),
+  "bargeInRate": zod.number(),
+  "escalationRate": zod.number()
+}))
 })
 
 
 /**
  * @summary List all registered bots
  */
+export const listBotsResponseTelephonyTypeDefault = `webrtc`;
 export const listBotsResponseActiveCallsDefault = 0;
 export const listBotsResponseDirectionDefault = `inbound`;
 export const listBotsResponseSupportedLanguagesDefault = [`en`];
@@ -340,6 +967,7 @@ export const ListBotsResponseItem = zod.object({
   "email": zod.string().nullish(),
   "sipExtension": zod.string(),
   "sipDomain": zod.string().nullish(),
+  "telephonyType": zod.enum(['webrtc', 'sip']).default(listBotsResponseTelephonyTypeDefault),
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']),
   "activeCalls": zod.number().default(listBotsResponseActiveCallsDefault),
@@ -351,6 +979,9 @@ export const ListBotsResponseItem = zod.object({
   "endpointSilenceMs": zod.number().default(listBotsResponseEndpointSilenceMsDefault),
   "backchannelThresholdMs": zod.number().default(listBotsResponseBackchannelThresholdMsDefault),
   "silenceRecoverySecs": zod.number().default(listBotsResponseSilenceRecoverySecsDefault),
+  "llmChainJson": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "sttMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "ttsMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListBotsResponse = zod.array(ListBotsResponseItem)
@@ -359,11 +990,14 @@ export const ListBotsResponse = zod.array(ListBotsResponseItem)
 /**
  * @summary Register a new bot
  */
+export const createBotBodyTelephonyTypeDefault = `webrtc`;
+
 export const CreateBotBody = zod.object({
   "displayName": zod.string(),
   "email": zod.string().nullish(),
   "sipExtension": zod.string(),
   "sipDomain": zod.string().nullish(),
+  "telephonyType": zod.enum(['webrtc', 'sip']).default(createBotBodyTelephonyTypeDefault),
   "whatsappNumber": zod.string().nullish(),
   "direction": zod.enum(['inbound', 'outbound']).optional(),
   "directionConfig": zod.record(zod.string(), zod.unknown()).optional(),
@@ -373,9 +1007,9 @@ export const CreateBotBody = zod.object({
   "endpointSilenceMs": zod.number().optional(),
   "backchannelThresholdMs": zod.number().optional(),
   "silenceRecoverySecs": zod.number().optional(),
-  "llmChainJson": zod.unknown().nullish(),
-  "sttMapJson": zod.unknown().nullish(),
-  "ttsMapJson": zod.unknown().nullish()
+  "llmChainJson": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "sttMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "ttsMapJson": zod.record(zod.string(), zod.unknown()).nullish()
 })
 
 
@@ -386,6 +1020,7 @@ export const GetBotParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const getBotResponseTelephonyTypeDefault = `webrtc`;
 export const getBotResponseActiveCallsDefault = 0;
 export const getBotResponseDirectionDefault = `inbound`;
 export const getBotResponseSupportedLanguagesDefault = [`en`];
@@ -401,6 +1036,7 @@ export const GetBotResponse = zod.object({
   "email": zod.string().nullish(),
   "sipExtension": zod.string(),
   "sipDomain": zod.string().nullish(),
+  "telephonyType": zod.enum(['webrtc', 'sip']).default(getBotResponseTelephonyTypeDefault),
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']),
   "activeCalls": zod.number().default(getBotResponseActiveCallsDefault),
@@ -412,11 +1048,10 @@ export const GetBotResponse = zod.object({
   "endpointSilenceMs": zod.number().default(getBotResponseEndpointSilenceMsDefault),
   "backchannelThresholdMs": zod.number().default(getBotResponseBackchannelThresholdMsDefault),
   "silenceRecoverySecs": zod.number().default(getBotResponseSilenceRecoverySecsDefault),
-  "createdAt": zod.coerce.date(),
-  "llmChainJson": zod.unknown().nullish(),
-  "sttMapJson": zod.unknown().nullish(),
-  "ttsMapJson": zod.unknown().nullish(),
-  "activePersonaId": zod.string().nullish()
+  "llmChainJson": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "sttMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "ttsMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 
@@ -432,6 +1067,7 @@ export const UpdateBotBody = zod.object({
   "email": zod.string().nullish(),
   "sipExtension": zod.string().optional(),
   "sipDomain": zod.string().nullish(),
+  "telephonyType": zod.enum(['webrtc', 'sip']).optional(),
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']).optional(),
   "direction": zod.enum(['inbound', 'outbound']).optional(),
@@ -442,11 +1078,12 @@ export const UpdateBotBody = zod.object({
   "endpointSilenceMs": zod.number().optional(),
   "backchannelThresholdMs": zod.number().optional(),
   "silenceRecoverySecs": zod.number().optional(),
-  "llmChainJson": zod.unknown().nullish(),
-  "sttMapJson": zod.unknown().nullish(),
-  "ttsMapJson": zod.unknown().nullish()
+  "llmChainJson": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "sttMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "ttsMapJson": zod.record(zod.string(), zod.unknown()).nullish()
 })
 
+export const updateBotResponseTelephonyTypeDefault = `webrtc`;
 export const updateBotResponseActiveCallsDefault = 0;
 export const updateBotResponseDirectionDefault = `inbound`;
 export const updateBotResponseSupportedLanguagesDefault = [`en`];
@@ -462,6 +1099,7 @@ export const UpdateBotResponse = zod.object({
   "email": zod.string().nullish(),
   "sipExtension": zod.string(),
   "sipDomain": zod.string().nullish(),
+  "telephonyType": zod.enum(['webrtc', 'sip']).default(updateBotResponseTelephonyTypeDefault),
   "whatsappNumber": zod.string().nullish(),
   "status": zod.enum(['ONLINE', 'OFFLINE', 'BUSY', 'ERROR']),
   "activeCalls": zod.number().default(updateBotResponseActiveCallsDefault),
@@ -473,6 +1111,9 @@ export const UpdateBotResponse = zod.object({
   "endpointSilenceMs": zod.number().default(updateBotResponseEndpointSilenceMsDefault),
   "backchannelThresholdMs": zod.number().default(updateBotResponseBackchannelThresholdMsDefault),
   "silenceRecoverySecs": zod.number().default(updateBotResponseSilenceRecoverySecsDefault),
+  "llmChainJson": zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  "sttMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
+  "ttsMapJson": zod.record(zod.string(), zod.unknown()).nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -482,6 +1123,337 @@ export const UpdateBotResponse = zod.object({
  */
 export const DeleteBotParams = zod.object({
   "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Get a bot's SIP configuration (credentials are write-only)
+ */
+export const GetSipConfigParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getSipConfigResponseRegistrarPortMax = 65535;
+
+export const getSipConfigResponseOutboundProxyPortMax = 65535;
+
+export const getSipConfigResponseRegisterExpirySecondsMin = 60;
+export const getSipConfigResponseRegisterExpirySecondsMax = 86400;
+
+export const getSipConfigResponseKeepaliveIntervalSecondsMax = 86400;
+
+
+export const getSipConfigResponseRtpPortMinMax = 65535;
+
+export const getSipConfigResponseRtpPortMaxMax = 65535;
+
+export const getSipConfigResponsePtimeMsMax = 1000;
+
+export const getSipConfigResponseMaxConcurrentCallsMax = 10000;
+
+export const getSipConfigResponseInboundDidsItemRegExp = new RegExp('^(\\+[1-9][0-9]{7,14}|\\+[1-9][0-9]{0,14}\\\*)$');
+export const getSipConfigResponseAnswerDelayMsMin = 0;
+export const getSipConfigResponseAnswerDelayMsMax = 120000;
+
+
+
+export const GetSipConfigResponse = zod.object({
+  "id": zod.string(),
+  "botId": zod.string(),
+  "enabled": zod.boolean(),
+  "sipDomain": zod.string().nullish(),
+  "registrarHost": zod.string(),
+  "registrarPort": zod.number().min(1).max(getSipConfigResponseRegistrarPortMax),
+  "transport": zod.enum(['udp', 'tcp', 'tls', 'wss']),
+  "extension": zod.string(),
+  "authUsername": zod.string(),
+  "passwordIsSet": zod.boolean(),
+  "passwordMasked": zod.string().nullish(),
+  "displayName": zod.string().nullish(),
+  "callerIdNumber": zod.string().nullish(),
+  "outboundProxyHost": zod.string().nullish(),
+  "outboundProxyPort": zod.number().min(1).max(getSipConfigResponseOutboundProxyPortMax).nullish(),
+  "registerExpirySeconds": zod.number().min(getSipConfigResponseRegisterExpirySecondsMin).max(getSipConfigResponseRegisterExpirySecondsMax),
+  "keepaliveIntervalSeconds": zod.number().min(1).max(getSipConfigResponseKeepaliveIntervalSecondsMax),
+  "codecs": zod.array(zod.enum(['PCMU', 'PCMA', 'G722', 'OPUS'])).min(1),
+  "dtmfMode": zod.enum(['rfc2833', 'sip_info', 'inband']),
+  "srtpMode": zod.enum(['disabled', 'optional', 'required']),
+  "rtpPortMin": zod.number().min(1).max(getSipConfigResponseRtpPortMinMax),
+  "rtpPortMax": zod.number().min(1).max(getSipConfigResponseRtpPortMaxMax),
+  "ptimeMs": zod.number().min(1).max(getSipConfigResponsePtimeMsMax),
+  "natTraversal": zod.enum(['none', 'stun', 'force_rport']),
+  "stunServer": zod.string().nullish(),
+  "localBindIp": zod.string().nullish(),
+  "externalIp": zod.string().nullish(),
+  "maxConcurrentCalls": zod.number().min(1).max(getSipConfigResponseMaxConcurrentCallsMax),
+  "inboundDids": zod.array(zod.string().regex(getSipConfigResponseInboundDidsItemRegExp)),
+  "answerDelayMs": zod.number().min(getSipConfigResponseAnswerDelayMsMin).max(getSipConfigResponseAnswerDelayMsMax),
+  "recordCalls": zod.boolean(),
+  "outboundEnabled": zod.boolean(),
+  "outboundPrefix": zod.string().nullish(),
+  "allowSelfSigned": zod.boolean(),
+  "debugLogging": zod.boolean(),
+  "registrationState": zod.enum(['unregistered', 'registering', 'registered', 'failed']),
+  "lastRegisteredAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "activeCalls": zod.number().optional()
+})
+
+
+/**
+ * @summary Create or update a bot's SIP configuration
+ */
+export const UpdateSipConfigParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateSipConfigBodyRegistrarHostMax = 253;
+
+export const updateSipConfigBodyRegistrarPortMax = 65535;
+
+export const updateSipConfigBodyExtensionMax = 64;
+
+export const updateSipConfigBodyAuthUsernameMax = 128;
+
+export const updateSipConfigBodyPasswordMax = 1024;
+
+export const updateSipConfigBodyCallerIdNumberMax = 64;
+
+export const updateSipConfigBodyOutboundProxyHostMax = 253;
+
+export const updateSipConfigBodyOutboundProxyPortMax = 65535;
+
+export const updateSipConfigBodyRegisterExpirySecondsMin = 60;
+export const updateSipConfigBodyRegisterExpirySecondsMax = 86400;
+
+export const updateSipConfigBodyKeepaliveIntervalSecondsMax = 86400;
+
+
+export const updateSipConfigBodyRtpPortMinMax = 65535;
+
+export const updateSipConfigBodyRtpPortMaxMax = 65535;
+
+export const updateSipConfigBodyPtimeMsMax = 1000;
+
+export const updateSipConfigBodyStunServerMax = 253;
+
+export const updateSipConfigBodyLocalBindIpMax = 64;
+
+export const updateSipConfigBodyExternalIpMax = 64;
+
+export const updateSipConfigBodyMaxConcurrentCallsMax = 10000;
+
+export const updateSipConfigBodyInboundDidsItemRegExp = new RegExp('^(\\+[1-9][0-9]{7,14}|\\+[1-9][0-9]{0,14}\\\*)$');
+export const updateSipConfigBodyAnswerDelayMsMin = 0;
+export const updateSipConfigBodyAnswerDelayMsMax = 120000;
+
+export const updateSipConfigBodyOutboundPrefixMax = 32;
+
+
+
+export const UpdateSipConfigBody = zod.object({
+  "enabled": zod.boolean().optional(),
+  "sipDomain": zod.string().nullish(),
+  "registrarHost": zod.string().min(1).max(updateSipConfigBodyRegistrarHostMax),
+  "registrarPort": zod.number().min(1).max(updateSipConfigBodyRegistrarPortMax).optional(),
+  "transport": zod.enum(['udp', 'tcp', 'tls', 'wss']).optional(),
+  "extension": zod.string().min(1).max(updateSipConfigBodyExtensionMax),
+  "authUsername": zod.string().min(1).max(updateSipConfigBodyAuthUsernameMax),
+  "password": zod.string().max(updateSipConfigBodyPasswordMax).optional().describe('Blank or omitted retains the existing password'),
+  "displayName": zod.string().nullish(),
+  "callerIdNumber": zod.string().max(updateSipConfigBodyCallerIdNumberMax).nullish(),
+  "outboundProxyHost": zod.string().max(updateSipConfigBodyOutboundProxyHostMax).nullish(),
+  "outboundProxyPort": zod.number().min(1).max(updateSipConfigBodyOutboundProxyPortMax).nullish(),
+  "registerExpirySeconds": zod.number().min(updateSipConfigBodyRegisterExpirySecondsMin).max(updateSipConfigBodyRegisterExpirySecondsMax).optional(),
+  "keepaliveIntervalSeconds": zod.number().min(1).max(updateSipConfigBodyKeepaliveIntervalSecondsMax).optional(),
+  "codecs": zod.array(zod.enum(['PCMU', 'PCMA', 'G722', 'OPUS'])).min(1).optional(),
+  "dtmfMode": zod.enum(['rfc2833', 'sip_info', 'inband']).optional(),
+  "srtpMode": zod.enum(['disabled', 'optional', 'required']).optional(),
+  "rtpPortMin": zod.number().min(1).max(updateSipConfigBodyRtpPortMinMax).optional(),
+  "rtpPortMax": zod.number().min(1).max(updateSipConfigBodyRtpPortMaxMax).optional(),
+  "ptimeMs": zod.number().min(1).max(updateSipConfigBodyPtimeMsMax).optional(),
+  "natTraversal": zod.enum(['none', 'stun', 'force_rport']).optional(),
+  "stunServer": zod.string().max(updateSipConfigBodyStunServerMax).nullish(),
+  "localBindIp": zod.string().max(updateSipConfigBodyLocalBindIpMax).nullish(),
+  "externalIp": zod.string().max(updateSipConfigBodyExternalIpMax).nullish(),
+  "maxConcurrentCalls": zod.number().min(1).max(updateSipConfigBodyMaxConcurrentCallsMax).optional(),
+  "inboundDids": zod.array(zod.string().regex(updateSipConfigBodyInboundDidsItemRegExp)).optional(),
+  "answerDelayMs": zod.number().min(updateSipConfigBodyAnswerDelayMsMin).max(updateSipConfigBodyAnswerDelayMsMax).optional(),
+  "recordCalls": zod.boolean().optional(),
+  "outboundEnabled": zod.boolean().optional(),
+  "outboundPrefix": zod.string().max(updateSipConfigBodyOutboundPrefixMax).nullish(),
+  "allowSelfSigned": zod.boolean().optional(),
+  "debugLogging": zod.boolean().optional()
+})
+
+export const updateSipConfigResponseRegistrarPortMax = 65535;
+
+export const updateSipConfigResponseOutboundProxyPortMax = 65535;
+
+export const updateSipConfigResponseRegisterExpirySecondsMin = 60;
+export const updateSipConfigResponseRegisterExpirySecondsMax = 86400;
+
+export const updateSipConfigResponseKeepaliveIntervalSecondsMax = 86400;
+
+
+export const updateSipConfigResponseRtpPortMinMax = 65535;
+
+export const updateSipConfigResponseRtpPortMaxMax = 65535;
+
+export const updateSipConfigResponsePtimeMsMax = 1000;
+
+export const updateSipConfigResponseMaxConcurrentCallsMax = 10000;
+
+export const updateSipConfigResponseInboundDidsItemRegExp = new RegExp('^(\\+[1-9][0-9]{7,14}|\\+[1-9][0-9]{0,14}\\\*)$');
+export const updateSipConfigResponseAnswerDelayMsMin = 0;
+export const updateSipConfigResponseAnswerDelayMsMax = 120000;
+
+
+
+export const UpdateSipConfigResponse = zod.object({
+  "id": zod.string(),
+  "botId": zod.string(),
+  "enabled": zod.boolean(),
+  "sipDomain": zod.string().nullish(),
+  "registrarHost": zod.string(),
+  "registrarPort": zod.number().min(1).max(updateSipConfigResponseRegistrarPortMax),
+  "transport": zod.enum(['udp', 'tcp', 'tls', 'wss']),
+  "extension": zod.string(),
+  "authUsername": zod.string(),
+  "passwordIsSet": zod.boolean(),
+  "passwordMasked": zod.string().nullish(),
+  "displayName": zod.string().nullish(),
+  "callerIdNumber": zod.string().nullish(),
+  "outboundProxyHost": zod.string().nullish(),
+  "outboundProxyPort": zod.number().min(1).max(updateSipConfigResponseOutboundProxyPortMax).nullish(),
+  "registerExpirySeconds": zod.number().min(updateSipConfigResponseRegisterExpirySecondsMin).max(updateSipConfigResponseRegisterExpirySecondsMax),
+  "keepaliveIntervalSeconds": zod.number().min(1).max(updateSipConfigResponseKeepaliveIntervalSecondsMax),
+  "codecs": zod.array(zod.enum(['PCMU', 'PCMA', 'G722', 'OPUS'])).min(1),
+  "dtmfMode": zod.enum(['rfc2833', 'sip_info', 'inband']),
+  "srtpMode": zod.enum(['disabled', 'optional', 'required']),
+  "rtpPortMin": zod.number().min(1).max(updateSipConfigResponseRtpPortMinMax),
+  "rtpPortMax": zod.number().min(1).max(updateSipConfigResponseRtpPortMaxMax),
+  "ptimeMs": zod.number().min(1).max(updateSipConfigResponsePtimeMsMax),
+  "natTraversal": zod.enum(['none', 'stun', 'force_rport']),
+  "stunServer": zod.string().nullish(),
+  "localBindIp": zod.string().nullish(),
+  "externalIp": zod.string().nullish(),
+  "maxConcurrentCalls": zod.number().min(1).max(updateSipConfigResponseMaxConcurrentCallsMax),
+  "inboundDids": zod.array(zod.string().regex(updateSipConfigResponseInboundDidsItemRegExp)),
+  "answerDelayMs": zod.number().min(updateSipConfigResponseAnswerDelayMsMin).max(updateSipConfigResponseAnswerDelayMsMax),
+  "recordCalls": zod.boolean(),
+  "outboundEnabled": zod.boolean(),
+  "outboundPrefix": zod.string().nullish(),
+  "allowSelfSigned": zod.boolean(),
+  "debugLogging": zod.boolean(),
+  "registrationState": zod.enum(['unregistered', 'registering', 'registered', 'failed']),
+  "lastRegisteredAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "activeCalls": zod.number().optional()
+})
+
+
+/**
+ * @summary Register this bot's SIP gateway
+ */
+export const RegisterSipParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RegisterSipResponse = zod.object({
+  "accepted": zod.boolean(),
+  "requestId": zod.string().nullish(),
+  "callId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Unregister this bot's SIP gateway
+ */
+export const UnregisterSipParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnregisterSipResponse = zod.object({
+  "accepted": zod.boolean(),
+  "requestId": zod.string().nullish(),
+  "callId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Place a SIP test call
+ */
+export const TestSipCallParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const testSipCallBodyToRegExp = new RegExp('^\\+[1-9][0-9]{7,14}$');
+
+
+export const TestSipCallBody = zod.object({
+  "to": zod.string().regex(testSipCallBodyToRegExp)
+})
+
+export const TestSipCallResponse = zod.object({
+  "accepted": zod.boolean(),
+  "requestId": zod.string().nullish(),
+  "callId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get SIP registration status
+ */
+export const GetSipStatusParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetSipStatusResponse = zod.object({
+  "registrationState": zod.enum(['unregistered', 'registering', 'registered', 'failed']),
+  "lastRegisteredAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "activeCalls": zod.number()
+})
+
+
+/**
+ * @summary List recent SIP events
+ */
+export const ListSipEventsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const listSipEventsQueryLimitDefault = 50;
+export const listSipEventsQueryLimitMax = 200;
+
+
+
+export const ListSipEventsQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listSipEventsQueryLimitMax).default(listSipEventsQueryLimitDefault),
+  "level": zod.enum(['debug', 'info', 'warn', 'error']).optional()
+})
+
+export const ListSipEventsResponseItem = zod.object({
+  "id": zod.string(),
+  "botId": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "level": zod.enum(['debug', 'info', 'warn', 'error']),
+  "direction": zod.enum(['inbound', 'outbound']).nullish(),
+  "methodResponse": zod.string().nullish(),
+  "summary": zod.string(),
+  "rawSnippet": zod.string().nullish()
+})
+export const ListSipEventsResponse = zod.array(ListSipEventsResponseItem)
+
+
+/**
+ * @summary Get external FreeSWITCH worker health
+ */
+export const GetSipHealthResponse = zod.object({
+  "enabled": zod.boolean(),
+  "reachable": zod.boolean(),
+  "error": zod.string().nullish()
 })
 
 
@@ -899,25 +1871,3 @@ export const ListMessageLogsResponseItem = zod.object({
 export const ListMessageLogsResponse = zod.array(ListMessageLogsResponseItem)
 
 
-export const ReceiveInboundCallResponse = zod.object({
-  "id": zod.string(),
-  "botId": zod.string(),
-  "direction": zod.enum(['INBOUND', 'OUTBOUND']),
-  "status": zod.enum(['INITIATING', 'RINGING', 'IN_PROGRESS', 'COMPLETED', 'FAILED']),
-  "customerNumber": zod.string().nullish(),
-  "customerName": zod.string().nullish(),
-  "startedAt": zod.coerce.date().nullish(),
-  "endedAt": zod.coerce.date().nullish(),
-  "durationSeconds": zod.number().nullish(),
-  "hangupReason": zod.string().nullish(),
-  "sipCode": zod.number().nullish(),
-  "amdResult": zod.string().nullish(),
-  "languageDetected": zod.string().nullish(),
-  "recordingUrl": zod.string().nullish(),
-  "summary": zod.string().nullish(),
-  "transferTarget": zod.string().nullish(),
-  "followUpSent": zod.boolean().optional(),
-  "personaId": zod.string().nullish(),
-  "composedPrompt": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
-})

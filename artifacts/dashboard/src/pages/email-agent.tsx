@@ -118,7 +118,7 @@ function ConfigTab() {
           <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-4">
             <li>Go to <span className="font-medium text-foreground">portal.azure.com</span> → Azure Active Directory → App registrations → New registration</li>
             <li>Name it anything (e.g. "VoxAgent") — Accounts in this org directory only</li>
-            <li>Go to <span className="font-medium text-foreground">API permissions</span> → Add permission → Microsoft Graph → Application permissions → add <code className="bg-muted px-0.5 rounded">Mail.Read</code>, <code className="bg-muted px-0.5 rounded">Mail.ReadWrite</code>, <code className="bg-muted px-0.5 rounded">Mail.Send</code>, <code className="bg-muted px-0.5 rounded">User.Read.All</code></li>
+            <li>Go to <span className="font-medium text-foreground">API permissions</span> → Add permission → Microsoft Graph → Application permissions → add <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">Mail.Read</code>, <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">Mail.ReadWrite</code>, <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">Mail.Send</code>, <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">User.Read.All</code></li>
             <li>Click <span className="font-medium text-foreground">Grant admin consent</span></li>
             <li>Go to <span className="font-medium text-foreground">Certificates &amp; secrets</span> → New client secret — copy the value immediately</li>
             <li>Paste Tenant ID, Client ID, and Secret above</li>
@@ -302,7 +302,7 @@ function InboxTab() {
           <button
             key={msg.id}
             onClick={() => setSelected(msg)}
-            className="w-full text-left rounded border border-border hover:bg-muted/50 transition-colors p-3 flex items-start gap-3 group"
+            className="w-full text-left rounded border border-border transition-colors hover:bg-white/[0.05] p-3 flex items-start gap-3 group"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -383,7 +383,7 @@ function StyleTab() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold">Call Summary Template</CardTitle>
-          <CardDescription className="text-xs">Used when the bot emails a call summary. Available variables: <code className="bg-muted px-0.5 rounded">{"{{customerName}}"}</code>, <code className="bg-muted px-0.5 rounded">{"{{summary}}"}</code>, <code className="bg-muted px-0.5 rounded">{"{{signOff}}"}</code></CardDescription>
+          <CardDescription className="text-xs">Used when the bot emails a call summary. Available variables: <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">{"{{customerName}}"}</code>, <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">{"{{summary}}"}</code>, <code className="rounded-md bg-white/[0.07] px-1 font-mono text-[0.95em] text-foreground/90">{"{{signOff}}"}</code></CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
@@ -413,7 +413,7 @@ function StyleTab() {
           <CardHeader className="pb-2"><CardTitle className="text-xs font-semibold">Style Examples (from Sent Items)</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {form.styleExamples.slice(0, 3).map((ex, i) => (
-              <div key={i} className="text-xs text-muted-foreground bg-muted/50 rounded p-2 line-clamp-3">{ex}</div>
+              <div key={i} className="text-xs text-muted-foreground rounded-lg bg-black/20 p-2 line-clamp-3">{ex}</div>
             ))}
           </CardContent>
         </Card>
@@ -475,10 +475,10 @@ function CallSummaryTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EmailAgent() {
   return (
-    <div className="p-6 space-y-4">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       <div>
-        <h1 className="text-lg font-bold text-foreground tracking-tight">Email Agent</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Live Microsoft 365 mailbox access — search, read, reply, and send call summaries in real time</p>
+        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Email Agent</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Live Microsoft 365 mailbox access — search, read, reply, and send call summaries in real time</p>
       </div>
 
       <Tabs defaultValue="inbox">

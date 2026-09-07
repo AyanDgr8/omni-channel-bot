@@ -1,2 +1,3 @@
 export * from "./generated/api";
-export * from "./generated/types";
+// Operation validators are the public API. Generated model types are not
+// star-exported because operation/type names collide.

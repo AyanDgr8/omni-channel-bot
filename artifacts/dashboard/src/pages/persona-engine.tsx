@@ -257,7 +257,7 @@ function RefinePanel({ personaId, currentTraits, onAccept, onClose }: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <div className="text-[10px] font-semibold text-muted-foreground uppercase">Before</div>
-              <div className="bg-muted/50 rounded p-2 text-xs space-y-1">
+              <div className="rounded-lg bg-black/20 p-2 text-xs space-y-1">
                 {(["warmth", "formality", "energy", "empathy", "verbosity"] as const).map(k => (
                   <div key={k} className="flex justify-between"><span className="capitalize">{k}</span><span>{result.before.tone[k]}/10</span></div>
                 ))}
@@ -327,7 +327,7 @@ function TestPanel({ personaId }: { personaId: string }) {
           <button key={s} onClick={() => send(s)} className="text-[11px] px-2 py-1 rounded border border-border hover:border-primary/50 hover:text-primary transition-colors">{s}</button>
         ))}
       </div>
-      <div className="min-h-40 max-h-64 overflow-y-auto space-y-2 bg-muted/30 rounded p-3">
+      <div className="min-h-40 max-h-64 overflow-y-auto space-y-2 rounded-lg bg-black/20 p-3">
         {messages.length === 0 && <div className="text-xs text-muted-foreground text-center py-6">Start the conversation above</div>}
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -338,7 +338,7 @@ function TestPanel({ personaId }: { personaId: string }) {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-card border border-border rounded-lg px-3 py-2 text-xs flex items-center gap-1.5 text-muted-foreground">
+            <div className="panel flex items-center gap-1.5 px-3 py-2 text-xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" /> Responding...
             </div>
           </div>
@@ -487,7 +487,7 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
               <SourceBadge source={persona.source} />
               {persona.isActive && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Active</span>}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">v{persona.version}{detail?.traits?.generatedByModel ? ` · ${detail.traits.generatedByModel}` : ""}</p>
+            <p className="mt-1 text-sm text-muted-foreground">v{persona.version}{detail?.traits?.generatedByModel ? ` · ${detail.traits.generatedByModel}` : ""}</p>
           </div>
         </div>
         <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
@@ -527,7 +527,7 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
       </div>
 
       {activeSection === "edit" && currentTraits && (
-        <div className="bg-card border border-border rounded p-4 max-w-2xl">
+        <div className="panel p-4 max-w-2xl">
           <TraitEditor traits={currentTraits} onChange={handleTraitsChange} validationIssues={validationIssues} />
           {(editedTraits || validationIssues.length > 0) && (
             <div className="pt-4 border-t border-border mt-4 space-y-2">
@@ -543,7 +543,7 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
       )}
 
       {activeSection === "refine" && currentTraits && (
-        <div className="bg-card border border-border rounded p-4 max-w-xl">
+        <div className="panel p-4 max-w-xl">
           <RefinePanel
             personaId={persona.id}
             currentTraits={currentTraits}
@@ -554,7 +554,7 @@ function PersonaDetailView({ persona, onBack, onRefresh }: {
       )}
 
       {activeSection === "test" && (
-        <div className="bg-card border border-border rounded p-4 max-w-xl">
+        <div className="panel p-4 max-w-xl">
           <TestPanel personaId={persona.id} />
         </div>
       )}
@@ -608,7 +608,7 @@ export default function PersonaEngine() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold">Persona Library</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">AI-powered persona profiles that guide your voice bot's behaviour</p>
+          <p className="mt-1 text-sm text-muted-foreground">AI-powered persona profiles that guide your voice bot's behaviour</p>
         </div>
         <Button size="sm" className="text-xs h-8 gap-1" onClick={() => setNewOpen(true)}>
           <Plus className="w-3 h-3" /> New Persona
@@ -620,10 +620,10 @@ export default function PersonaEngine() {
       )}
 
       {!isLoading && personas.length === 0 && (
-        <div className="text-center py-12 border border-dashed border-border rounded-lg">
-          <Bot className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-40" />
+        <div className="empty-state">
+          <Bot className="empty-state-icon" />
           <p className="text-sm text-muted-foreground">No personas yet</p>
-          <p className="text-xs text-muted-foreground mt-1 mb-4">Create one or wait for the library personas to load</p>
+          <p className="-mt-2 max-w-xs text-xs text-muted-foreground">Create one or wait for the library personas to load</p>
           <Button size="sm" className="text-xs h-8" onClick={() => setNewOpen(true)}><Plus className="w-3 h-3 mr-1" />Create First Persona</Button>
         </div>
       )}
@@ -638,7 +638,7 @@ export default function PersonaEngine() {
                   <SourceBadge source={p.source} />
                   {p.isActive && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Active</span>}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">v{p.version}{p.generatedByModel ? ` · ${p.generatedByModel}` : ""}</p>
+                <p className="mt-1 text-sm text-muted-foreground">v{p.version}{p.generatedByModel ? ` · ${p.generatedByModel}` : ""}</p>
               </div>
             </div>
 

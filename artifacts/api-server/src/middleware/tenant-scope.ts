@@ -22,6 +22,7 @@ import type { UserRole } from "@workspace/db";
 const EXEMPT_EXACT: Set<string> = new Set(["/api/v1/health"]);
 /** Route prefixes exempted from session auth (handled by webhook secret instead) */
 const WEBHOOK_PREFIX = "/api/v1/calls/receive";
+const MEDIA_EVENT_PATH = /^\/api\/v1\/calls\/[^/]+\/media-events$/;
 
 export async function tenantScope(
   req: Request,
@@ -42,8 +43,15 @@ export async function tenantScope(
     return;
   }
 
+  // Worker callbacks authenticate themselves in the SIP router with a distinct
+  // bearer secret; sessions must not be required for this machine-to-machine path.
+  if (req.originalUrl.startsWith("/api/internal/freeswitch/")) {
+    next();
+    return;
+  }
+
   // ── 3. Telephony webhook — authenticate by secret + DID resolution ──────
-  if (req.originalUrl.startsWith(WEBHOOK_PREFIX)) {
+  if (req.originalUrl.startsWith(WEBHOOK_PREFIX) || MEDIA_EVENT_PATH.test(req.path)) {
     const secret = req.headers["x-webhook-secret"] as string | undefined;
     const toNumber = (req.body as Record<string, unknown>)?.to as string | undefined;
 

@@ -74,20 +74,40 @@ function fmtDate(d: string | Date | null | undefined) {
 
 type CallRow = CallList["calls"][0];
 
-function PersonaInfo({ personaId, composedPrompt }: { personaId: string; composedPrompt?: string | null }) {
+function PersonaInfo({
+  personaId,
+  snapshotName,
+  snapshotVersion,
+  composedPrompt,
+}: {
+  personaId: string;
+  snapshotName?: string | null;
+  snapshotVersion?: number | null;
+  composedPrompt?: string | null;
+}) {
   const [promptOpen, setPromptOpen] = useState(false);
+
+  // Use live fetch only as an enrichment fallback when snapshot is absent
+  const needsFallback = !snapshotName;
   const { data: persona } = useQuery<PersonaDetail>({
     queryKey: ["persona-detail-call", personaId],
     queryFn: () => api(`/api/v1/personas/${personaId}`),
     staleTime: 5 * 60 * 1000,
+    enabled: needsFallback,
   });
+
+  const displayName = snapshotName ?? persona?.name ?? personaId;
+  const displayVersion = snapshotVersion ?? persona?.version;
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5 text-[11px] text-foreground">
         <Bot className="w-3 h-3 text-primary shrink-0" />
         <span className="font-medium">Persona:</span>
-        <span>{persona ? `${persona.name} (v${persona.version})` : personaId}</span>
+        <span>
+          {displayName}
+          {displayVersion != null ? ` (v${displayVersion})` : ""}
+        </span>
       </div>
       {composedPrompt && (
         <div>
@@ -99,7 +119,7 @@ function PersonaInfo({ personaId, composedPrompt }: { personaId: string; compose
             View System Prompt
           </button>
           {promptOpen && (
-            <pre className="mt-2 p-3 rounded bg-muted/50 border border-border text-[11px] text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto">
+            <pre className="mt-2 p-3 rounded-xl border border-white/[0.07] bg-black/20 text-[11px] text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto">
               {composedPrompt}
             </pre>
           )}
@@ -114,10 +134,12 @@ function CallDetailPanel({ call }: { call: CallRow }) {
   const ConnectIcon = connectCfg?.icon ?? CheckCircle2;
   const langSwitches: Array<{ from: string; to: string; at: string }> = (call as any).languageSwitches ?? [];
   const personaId = (call as any).personaId as string | null | undefined;
+  const snapshotName = (call as any).personaName as string | null | undefined;
+  const snapshotVersion = (call as any).personaVersion as number | null | undefined;
   const composedPrompt = (call as any).composedPrompt as string | null | undefined;
 
   return (
-    <div className="bg-muted/30 border-t border-border px-4 py-3 space-y-3 text-[11px]">
+    <div className="border-t border-border bg-white/[0.03] px-4 py-3 space-y-3 text-[11px]">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
         {/* Connect Outcome */}
         <div className="space-y-0.5">
@@ -201,7 +223,7 @@ function CallDetailPanel({ call }: { call: CallRow }) {
       {/* Persona */}
       {personaId ? (
         <div className="pt-2 border-t border-border/60">
-          <PersonaInfo personaId={personaId} composedPrompt={composedPrompt} />
+          <PersonaInfo personaId={personaId} snapshotName={snapshotName} snapshotVersion={snapshotVersion} composedPrompt={composedPrompt} />
         </div>
       ) : (
         <div className="pt-2 border-t border-border/60 flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -261,11 +283,11 @@ export default function Calls() {
   const total = data?.total ?? 0;
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-foreground tracking-tight">Call Log</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{total.toLocaleString()} total calls</p>
+          <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Call Log</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{total.toLocaleString()} total calls</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5 text-xs">
@@ -286,7 +308,7 @@ export default function Calls() {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-card-border rounded overflow-hidden">
+      <div className="panel overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border">
@@ -314,7 +336,7 @@ export default function Calls() {
                 return (
                   <React.Fragment key={call.id}>
                     <tr
-                      className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${isExpanded ? "bg-muted/20" : ""}`}
+                      className={`border-b border-border/50 transition-colors hover:bg-white/[0.035] cursor-pointer ${isExpanded ? "bg-muted/20" : ""}`}
                       onClick={() => setExpandedRow(isExpanded ? null : call.id)}
                     >
                       <td className="px-2 py-2.5 text-muted-foreground">

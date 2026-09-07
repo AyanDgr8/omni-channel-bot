@@ -60,16 +60,16 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="animate-fade-in space-y-6 p-6 md:p-8">
       <div>
-        <h1 className="text-lg font-bold text-foreground tracking-tight">Calendar</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Schedule appointments and send calendar invites</p>
+        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-[-0.022em] text-foreground">Calendar</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Schedule appointments and send calendar invites</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Slot Picker */}
         <div className="space-y-4">
-          <div className="bg-card border border-card-border rounded p-4 space-y-3">
+          <div className="panel p-4 space-y-3">
             <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Find Available Slots</h3>
             <div>
               <Label className="text-xs">Calendar Email</Label>
@@ -111,7 +111,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Invite Form */}
-        <div className="bg-card border border-card-border rounded p-4 space-y-3">
+        <div className="panel p-4 space-y-3">
           <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Create Invite</h3>
           {selectedSlot && (
             <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-primary/10 border border-primary/20">

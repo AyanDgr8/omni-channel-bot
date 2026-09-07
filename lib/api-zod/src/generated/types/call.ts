@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CallDirection } from './callDirection';
+import type { CallLanguageSwitchesItem } from './callLanguageSwitchesItem';
 import type { CallStatus } from './callStatus';
 
 export interface Call {
@@ -38,5 +39,37 @@ export interface Call {
   /** @nullable */
   transferTarget?: string | null;
   followUpSent?: boolean;
+  /**
+     * ID of the persona that was active when this call started
+     * @nullable
+     */
+  personaId?: string | null;
+  /**
+     * Fully-composed system prompt injected for this call
+     * @nullable
+     */
+  composedPrompt?: string | null;
+  /** @nullable */
+  personaName?: string | null;
+  /** @nullable */
+  personaVersion?: number | null;
+  /** @nullable */
+  connectOutcome?: string | null;
+  interruptionCount?: number;
+  escalationCount?: number;
+  /** @nullable */
+  languageSwitches?: CallLanguageSwitchesItem[] | null;
+  /** @nullable */
+  finalDisposition?: string | null;
+  /** @nullable */
+  disclosureText?: string | null;
+  /** @nullable */
+  disclosurePlayedAt?: Date | null;
+  /** @nullable */
+  recordingConsentStatus?: string | null;
+  /** @nullable */
+  recordingConsentAt?: Date | null;
+  /** @nullable */
+  complianceDecisionId?: string | null;
   createdAt: Date;
 }

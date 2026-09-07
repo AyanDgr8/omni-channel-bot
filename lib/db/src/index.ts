@@ -66,3 +66,4 @@ export async function runMigrations(migrationsFolder: string): Promise<void> {
 }
 
 export * from "./schema";
+export * from "./sip-events";

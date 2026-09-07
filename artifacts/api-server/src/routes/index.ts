@@ -16,6 +16,10 @@ import personasRouter from "./personas";
 import providersRouter from "./providers";
 import modelCatalogRouter from "./model-catalog";
 import engineRouter from "./engine";
+import complianceRouter from "./compliance";
+import campaignsRouter from "./campaigns";
+import sipRouter from "./sip";
+import voiceAgentRouter from "./voice-agent";
 
 const router: IRouter = Router();
 
@@ -36,5 +40,9 @@ router.use(personasRouter);
 router.use(providersRouter);
 router.use(modelCatalogRouter);
 router.use(engineRouter);
+router.use(complianceRouter);
+router.use(campaignsRouter);
+router.use(sipRouter);
+router.use(voiceAgentRouter);
 
 export default router;

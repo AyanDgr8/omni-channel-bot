@@ -7,7 +7,11 @@
  */
 import type { BotUpdateDirection } from './botUpdateDirection';
 import type { BotUpdateDirectionConfig } from './botUpdateDirectionConfig';
+import type { BotUpdateLlmChainJsonItem } from './botUpdateLlmChainJsonItem';
 import type { BotUpdateStatus } from './botUpdateStatus';
+import type { BotUpdateSttMapJson } from './botUpdateSttMapJson';
+import type { BotUpdateTelephonyType } from './botUpdateTelephonyType';
+import type { BotUpdateTtsMapJson } from './botUpdateTtsMapJson';
 
 export interface BotUpdate {
   displayName?: string;
@@ -16,6 +20,7 @@ export interface BotUpdate {
   sipExtension?: string;
   /** @nullable */
   sipDomain?: string | null;
+  telephonyType?: BotUpdateTelephonyType;
   /** @nullable */
   whatsappNumber?: string | null;
   status?: BotUpdateStatus;
@@ -27,4 +32,10 @@ export interface BotUpdate {
   endpointSilenceMs?: number;
   backchannelThresholdMs?: number;
   silenceRecoverySecs?: number;
+  /** @nullable */
+  llmChainJson?: BotUpdateLlmChainJsonItem[] | null;
+  /** @nullable */
+  sttMapJson?: BotUpdateSttMapJson;
+  /** @nullable */
+  ttsMapJson?: BotUpdateTtsMapJson;
 }
