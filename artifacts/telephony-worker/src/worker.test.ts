@@ -45,7 +45,8 @@ test("bootstrap accepts the fixed direct-config envelope", () => {
 test("Sofia XML escapes credentials and applies transport policy without leaking password", () => {
   const out = gatewayXml({ ...config, password: "s<&\"'", transport: "tls", codecs: ["PCMU"], srtpMode: "required", keepaliveIntervalSeconds: 20 });
   assert.match(out, /password" value="s&lt;&amp;&quot;&apos;"/); assert.match(out, /tls-verify-policy" value="all"/);
-  assert.match(out, /rtp_secure_media" value="mandatory"/); assert.match(out, /options-ping" value="20"/);
+  assert.match(out, /username" value="1200"/); assert.match(out, /auth-username" value="1200"/); assert.match(out, /ping" value="20"/);
+  assert.doesNotMatch(out, /codec-prefs|rtp_secure_media|dtmf-type|aggressive-nat-detection/);
 });
 test("DID matching permits only exact E.164 or one trailing-prefix wildcard", () => {
   const didConfig = { ...config, inboundDids: ["+15551234567", "+4420*", "+1*"] };
