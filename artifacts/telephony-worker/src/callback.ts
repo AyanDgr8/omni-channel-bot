@@ -12,7 +12,8 @@ export class CallbackClient {
   }
   async authorizeInbound(request: InboundSessionRequest): Promise<InboundSession> {
     const payload = JSON.stringify(request);
-    const url = new URL("/internal/freeswitch/inbound-session", this.url);
+    const url = new URL(this.url);
+    url.pathname = url.pathname.replace(/\/callback\/?$/, "/inbound-session");
     const response = await fetch(url, { method: "POST", headers: callbackHeaders(this.secret, payload), body: payload, signal: AbortSignal.timeout(5_000) });
     if (!response.ok) return { accepted: false, reason: `Inbound authorization returned HTTP ${response.status}` };
     const session = await response.json() as InboundSession;

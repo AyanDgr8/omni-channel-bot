@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { CallbackClient } from "./callback.js";
 import type { EslClient, EslFrame } from "./esl.js";
-import { originate, token, type MediaSession, type SipConfig, gatewayName } from "./protocol.js";
+import { gatewayIdentity, originate, token, type MediaSession, type SipConfig, gatewayName } from "./protocol.js";
 import type { SofiaProvisioner } from "./sofia.js";
 
 type State = "unregistered" | "registering" | "registered" | "failed";
@@ -106,7 +106,7 @@ export class RegistrationManager {
       if (inbound && agent.calls.size >= (agent.config.maxConcurrentCalls ?? 1)) { this.esl.command(`api uuid_kill ${token(uuid, "call UUID")} 486`); await this.event(agent, "warn", "Inbound call rejected: concurrency limit", "inbound"); return; }
       let call: CallContext;
       if (inbound) {
-        const session = await this.callback.authorizeInbound({ tenantId: agent.config.tenantId!, botId: agent.config.botId!, gatewayIdentity: gatewayName(agent.config), freeswitchUuid: uuid, from: h["caller-caller-id-number"] ?? h["variable_sip_from_user"] ?? "", to: h["variable_destination_number"] ?? h["variable_sip_to_user"] ?? "", eventId: randomUUID() });
+        const session = await this.callback.authorizeInbound({ tenantId: agent.config.tenantId!, botId: agent.config.botId!, gatewayIdentity: gatewayIdentity(agent.config), freeswitchUuid: uuid, from: h["caller-caller-id-number"] ?? h["variable_sip_from_user"] ?? "", to: h["variable_destination_number"] ?? h["variable_sip_to_user"] ?? "", eventId: randomUUID() });
         if (session.accepted !== true || !session.callId || session.freeswitchUuid !== uuid || !session.mediaBridgeUrl || !session.mediaSessionToken || !session.sessionConfig) { this.esl.command(`api uuid_kill ${token(uuid, "call UUID")} 486`); return; }
         call = { agent, callId: session.callId, freeswitchUuid: uuid, mediaBridgeUrl: session.mediaBridgeUrl, mediaSessionToken: session.mediaSessionToken, sessionConfig: session.sessionConfig };
       } else call = existingCall ?? { agent, callId: h["variable_vox_call_id"] ?? uuid, freeswitchUuid: uuid, mediaBridgeUrl: agent.config.mediaBridgeUrl, mediaSessionToken: agent.config.mediaSessionToken };

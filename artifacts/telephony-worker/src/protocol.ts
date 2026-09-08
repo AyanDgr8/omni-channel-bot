@@ -41,6 +41,9 @@ export function gatewayName(config: SipConfig): string {
   const bot = token(config.botId ?? config.id ?? "unknown", "bot ID").replace(/[^A-Za-z0-9_]/g, "_");
   return `vox_${tenant}_${bot}`;
 }
+export function gatewayIdentity(config: SipConfig): string {
+  return `${token(config.registrarHost, "registrar host")}:${config.registrarPort ?? 5060}:${token(config.extension, "extension")}`;
+}
 export function xml(value: string): string { return value.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", "\"": "&quot;" })[c]!); }
 export function redact(value: string): string { return value.replace(/(<param name="password" value=")[^"]*(")/gi, "$1[REDACTED]$2").replace(/((?:password|mediaSessionToken|token)[=:]?\s*["']?)[^,"'\s}]+/gi, "$1[REDACTED]"); }
 export function parseBootstrap(value: unknown): SipConfig[] {

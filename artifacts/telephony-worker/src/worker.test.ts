@@ -78,7 +78,7 @@ test("inbound matching is gateway-scoped and answer lifecycle attaches and clean
   assert.equal(esl.commands.filter((c) => c.includes("uuid_answer call_2")).length, 1);
   assert.ok(esl.commands.some((c) => c.includes("uuid_audio_fork call_2 start")));
   assert.ok(esl.commands.some((c) => c.includes("uuid_audio_fork call_2 stop")));
-  assert.deepEqual(callback.inbound[0], { tenantId: "tenant_2", botId: "bot_2", gatewayIdentity: "vox_tenant_2_bot_2", freeswitchUuid: "call_2", from: "", to: "1200", eventId: callback.inbound[0]?.eventId });
+  assert.deepEqual(callback.inbound[0], { tenantId: "tenant_2", botId: "bot_2", gatewayIdentity: "sip.example.com:5060:1200", freeswitchUuid: "call_2", from: "", to: "1200", eventId: callback.inbound[0]?.eventId });
   assert.ok(callback.events.some((e) => e.callId === "durable_2" && e.freeswitchUuid === "call_2" && e.eventType === "dtmf" && e.dtmfDigit === "5"));
   const dtmfBody = JSON.parse(JSON.stringify(callback.events.find((e) => e.eventType === "dtmf")));
   assert.deepEqual(dtmfBody, { tenantId: "tenant_2", botId: "bot_2", activeCalls: 1, callId: "durable_2", freeswitchUuid: "call_2", eventType: "dtmf", dtmfDigit: "5", event: { level: "info", summary: "DTMF received", direction: "inbound" } });
@@ -123,13 +123,13 @@ test("HTTP originate and DTMF routes enforce auth and canonical payloads", async
 });
 test("inbound-session client parses the canonical authorization response", async () => {
   const api = (await import("node:http")).createServer((req, res) => {
-    assert.equal(req.url, "/internal/freeswitch/inbound-session"); assert.equal(req.headers.authorization, "Bearer callback-secret");
+    assert.equal(req.url, "/api/internal/freeswitch/inbound-session"); assert.equal(req.headers.authorization, "Bearer callback-secret");
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ accepted: true, callId: "durable_api", freeswitchUuid: "fs_api", mediaBridgeUrl: "wss://bridge.example.test/media", mediaSessionToken: "private", sessionConfig: { locale: "en" } }));
   });
   await new Promise<void>((resolve) => api.listen(0, "127.0.0.1", resolve));
   try {
-    const client = new CallbackClient(`http://127.0.0.1:${(api.address() as AddressInfo).port}/internal/freeswitch/callback`, "callback-secret");
+    const client = new CallbackClient(`http://127.0.0.1:${(api.address() as AddressInfo).port}/api/internal/freeswitch/callback`, "callback-secret");
     const result = await client.authorizeInbound({ tenantId: "tenant_1", botId: "bot_1", gatewayIdentity: "vox_tenant_1_bot_1", freeswitchUuid: "fs_api", from: "100", to: "1200", eventId: "event_1" });
     assert.equal(result.accepted, true); assert.equal(result.callId, "durable_api"); assert.equal(result.freeswitchUuid, "fs_api");
   } finally { await new Promise<void>((resolve) => api.close(() => resolve())); }
