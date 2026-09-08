@@ -7,13 +7,14 @@ import { createWorkerServer } from "./http.js";
 
 const required = (name: string): string => { const value = process.env[name]; if (!value) throw new Error(`${name} is required`); return value; };
 const auth = required("FREESWITCH_WORKER_AUTH_SECRET");
-const callback = new CallbackClient(required("FREESWITCH_CALLBACK_URL"), required("FREESWITCH_WORKER_CALLBACK_SECRET"));
+const callbackSecret = required("FREESWITCH_WORKER_CALLBACK_SECRET");
+const callback = new CallbackClient(required("FREESWITCH_CALLBACK_URL"), callbackSecret);
 const esl = new EslClient({ host: required("FREESWITCH_ESL_HOST"), port: Number(process.env.FREESWITCH_ESL_PORT ?? 8021), password: required("FREESWITCH_ESL_PASSWORD"), tls: process.env.FREESWITCH_ESL_TLS === "true", rejectUnauthorized: process.env.FREESWITCH_ESL_REJECT_UNAUTHORIZED !== "false" });
 const provisioner = new SofiaProvisioner(required("FREESWITCH_SOFIA_GATEWAY_DIR"), () => { esl.command("api reloadxml"); esl.command("api sofia profile external rescan"); });
 const manager = new RegistrationManager(esl, callback, provisioner); esl.connect();
 const configUrl = required("FREESWITCH_CONFIG_URL");
 const bootstrap = async (): Promise<void> => {
-  const response = await fetch(configUrl, { headers: { authorization: `Bearer ${auth}` }, signal: AbortSignal.timeout(5_000) });
+  const response = await fetch(configUrl, { headers: { authorization: `Bearer ${callbackSecret}` }, signal: AbortSignal.timeout(5_000) });
   if (!response.ok) throw new Error(`Config retrieval returned HTTP ${response.status}`);
   await manager.reconcile(parseBootstrap(await response.json()));
 };
