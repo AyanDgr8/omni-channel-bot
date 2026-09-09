@@ -27,7 +27,7 @@ export class EslClient extends EventEmitter {
   private schedule(): void { if (!this.retry) this.retry = setTimeout(() => { this.retry = undefined; this.connect(); }, Math.min(this.reconnectMs *= 2, 300_000)); }
   private receive(data: string): void {
     const parsed = parseFrames(this.buffer + data); this.buffer = parsed.remainder;
-    for (const frame of parsed.frames) { if (frame.headers["content-type"] === "auth/request") this.write(`auth ${this.options.password}`); else if (frame.headers["reply-text"]?.startsWith("+OK accepted")) { this.ready = true; this.reconnectMs = 1_000; this.write("event plain CHANNEL_CREATE CHANNEL_PROGRESS CHANNEL_ANSWER CHANNEL_HANGUP CHANNEL_HANGUP_COMPLETE DTMF CUSTOM sofia::register"); this.emit("ready"); } else this.emit("frame", frame); }
+    for (const frame of parsed.frames) { if (frame.headers["content-type"] === "auth/request") this.write(`auth ${this.options.password}`); else if (frame.headers["reply-text"]?.startsWith("+OK accepted")) { this.ready = true; this.reconnectMs = 1_000; this.write("event plain CHANNEL_CREATE CHANNEL_PROGRESS CHANNEL_ANSWER CHANNEL_HANGUP CHANNEL_HANGUP_COMPLETE DTMF CUSTOM sofia::register sofia::gateway_state"); this.emit("ready"); } else this.emit("frame", frame); }
   }
   private write(command: string): void { this.socket?.write(`${command}\n\n`); }
   command(command: string): void { if (!this.ready) throw new Error("ESL is not connected"); if (/[\r\n]/.test(command)) throw new Error("Unsafe ESL command"); this.write(command); }

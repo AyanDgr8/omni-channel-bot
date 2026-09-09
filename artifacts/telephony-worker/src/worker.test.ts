@@ -67,6 +67,17 @@ test("registration changes state only after a Sofia event and retries failures",
   esl.emit("frame", { headers: { "event-name": "CUSTOM" }, body: "Event-Subclass: sofia::register\nGateway-Name: vox_tenant_1_bot_1\nProfile-Name: external\nStatus: Registered" });
   await flush(); assert.equal(callback.events.at(-1)?.registrationState, "registered");
 });
+test("outbound Sofia gateway-state events update registration and unchanged inventory is not reprovisioned", async () => {
+  const esl = new FakeEsl(), callback = new FakeCallback(), manager = new RegistrationManager(esl as never, callback as never);
+  await manager.reconcile([config]);
+  const firstProvisionCount = esl.commands.filter((command) => command === "api sofia profile external rescan").length;
+  await manager.reconcile([config]);
+  assert.equal(esl.commands.filter((command) => command === "api sofia profile external rescan").length, firstProvisionCount);
+  esl.emit("frame", { headers: { "event-name": "CUSTOM" }, body: "Event-Subclass: sofia::gateway_state\nGateway: vox_tenant_1_bot_1\nState: FAIL_WAIT" });
+  await flush(); assert.equal(callback.events.at(-1)?.registrationState, "failed");
+  esl.emit("frame", { headers: { "event-name": "CUSTOM" }, body: "Event-Subclass: sofia::gateway_state\nGateway: vox_tenant_1_bot_1\nState: REGED" });
+  await flush(); assert.equal(callback.events.at(-1)?.registrationState, "registered");
+});
 test("inbound matching is gateway-scoped and answer lifecycle attaches and cleans audio bridge", async () => {
   const esl = new FakeEsl(), callback = new FakeCallback(), manager = new RegistrationManager(esl as never, callback as never);
   const other = { ...config, tenantId: "tenant_2", botId: "bot_2" };

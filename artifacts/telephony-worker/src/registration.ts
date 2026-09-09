@@ -5,7 +5,7 @@ import { gatewayIdentity, originate, token, type MediaSession, type SipConfig, g
 import type { SofiaProvisioner } from "./sofia.js";
 
 type State = "unregistered" | "registering" | "registered" | "failed";
-type Agent = { config: SipConfig; state: State; retryMs: number; timer?: NodeJS.Timeout; calls: Set<string>; sessions: Set<string> };
+type Agent = { config: SipConfig; fingerprint: string; state: State; retryMs: number; timer?: NodeJS.Timeout; calls: Set<string>; sessions: Set<string> };
 type CallContext = { agent: Agent; callId: string; freeswitchUuid: string; mediaBridgeUrl?: string; mediaSessionToken?: string; sessionConfig?: Record<string, unknown> };
 const registrationFailure = /(?:^|[^0-9])(401|403|407|408|503)(?:[^0-9]|$)/;
 export function eventHeaders(frame: EslFrame): Record<string, string> {
@@ -26,11 +26,16 @@ export class RegistrationManager {
     esl.on("frame", (frame: EslFrame) => { this.eventQueue = this.eventQueue.then(() => this.onFrame(frame)).catch(() => undefined); }); esl.on("ready", () => void this.reconcile());
   }
   private key(c: SipConfig): string { return `${token(c.tenantId ?? "", "tenant ID")}:${token(c.botId ?? "", "bot ID")}`; }
+  private fingerprint(c: SipConfig): string { return JSON.stringify(c); }
   async reconcile(configs?: SipConfig[]): Promise<void> {
     if (configs) {
       const wanted = new Set(configs.map((c) => this.key(c)));
       for (const key of this.agents.keys()) if (!wanted.has(key)) await this.unregisterByKey(key);
-      for (const config of configs) await this.reload(config);
+      for (const config of configs) {
+        const existing = this.agents.get(this.key(config));
+        if (!existing || existing.fingerprint !== this.fingerprint(config)) await this.reload(config);
+      }
+      return;
     }
     for (const agent of this.agents.values()) if (agent.config.enabled) await this.provision(agent);
   }
@@ -38,10 +43,14 @@ export class RegistrationManager {
     validateDidPatterns(config.inboundDids);
     const key = this.key(config); const existing = this.agents.get(key);
     if (existing?.timer) clearTimeout(existing.timer);
-    const agent: Agent = { config, state: "unregistered", retryMs: 1_000, calls: existing?.calls ?? new Set(), sessions: existing?.sessions ?? new Set() };
+    const agent: Agent = { config, fingerprint: this.fingerprint(config), state: "unregistered", retryMs: 1_000, calls: existing?.calls ?? new Set(), sessions: existing?.sessions ?? new Set() };
     this.agents.set(key, agent); await this.provision(agent);
   }
-  async register(config: SipConfig): Promise<void> { await this.reload(config); const agent = this.agents.get(this.key(config)); if (agent) this.requestRegister(agent); }
+  async register(config: SipConfig): Promise<void> {
+    let agent = this.agents.get(this.key(config));
+    if (!agent || agent.fingerprint !== this.fingerprint(config)) { await this.reload(config); agent = this.agents.get(this.key(config)); }
+    if (agent) this.requestRegister(agent);
+  }
   async unregister(config: SipConfig): Promise<void> { await this.unregisterByKey(this.key(config)); }
   private async unregisterByKey(key: string): Promise<void> {
     const agent = this.agents.get(key); if (!agent) return; if (agent.timer) clearTimeout(agent.timer);
@@ -89,11 +98,14 @@ export class RegistrationManager {
   }
   private async onFrame(frame: EslFrame): Promise<void> {
     const h = eventHeaders(frame), name = h["event-name"], gateway = h["gateway-name"] ?? h["variable_sip_gateway_name"] ?? h["variable_sip_gateway"];
-    if (h["event-subclass"] === "sofia::register" || name === "SOFIA::REGISTER") {
-      const agent = [...this.agents.values()].find((a) => gateway === gatewayName(a.config) && (h["profile-name"] ?? h["sofia-profile-name"] ?? "external") === "external");
-      if (!agent) return; const status = `${h.status ?? h["reply-text"] ?? frame.body}`;
-      if (registrationFailure.test(status) || /\b(?:fail|error|denied)\b/i.test(status)) this.fail(agent, status.replace(/[\r\n]/g, " ").slice(0, 300));
-      else if (/\b(?:registered|success|ok)\b/i.test(status)) this.registered(agent);
+    const subclass = h["event-subclass"]?.toLowerCase();
+    if (subclass === "sofia::register" || subclass === "sofia::gateway_state" || name === "SOFIA::REGISTER") {
+      const gatewayId = gateway ?? h.gateway;
+      const agent = [...this.agents.values()].find((a) => gatewayId === gatewayName(a.config) && (h["profile-name"] ?? h["sofia-profile-name"] ?? "external") === "external");
+      if (!agent) return;
+      const status = `${h.state ?? h.status ?? h["reply-text"] ?? frame.body}`;
+      if (registrationFailure.test(status) || /\b(?:failed|failure|fail_wait|error|denied|expired)\b/i.test(status)) this.fail(agent, status.replace(/[\r\n]/g, " ").slice(0, 300));
+      else if (/\b(?:reged|registered|success|ok)\b/i.test(status)) this.registered(agent);
       return;
     }
     if (!name) return; const uuid = h["unique-id"] ?? h["caller-unique-id"]; if (!uuid) return;
